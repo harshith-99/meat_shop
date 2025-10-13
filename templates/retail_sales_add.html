@@ -1,0 +1,336 @@
+{% load static %}
+{% include "sidebar/sidebar.html" %}
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">Retail Sales</h1>
+
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+
+    <form method="post">
+        {% csrf_token %}
+
+        <!-- Sales Info -->
+        <div class="card shadow mb-4">
+            {{ form.non_field_errors }}
+            <div class="row p-3">
+                <div class="col-md-3">
+                    {{ form.receipt_no.label_tag }}
+                    <span class="text-danger">{{ form.receipt_no.errors|join:", " }}</span>
+                    {{ form.receipt_no }}
+                </div>
+                <div class="col-md-3">
+                    {{ form.sales_date.label_tag }}
+                    <span class="text-danger">{{ form.sales_date.errors|join:", " }}</span>
+                    {{ form.sales_date }}
+                </div>
+                {% if is_admin_like %}
+                <div class="col-md-3">
+                    {{ form.branch.label_tag }}
+                    <span class="text-danger">{{ form.branch.errors|join:", " }}</span>
+                    {{ form.branch }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Customer Details -->
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Customer Details (Optional)</h6>
+            </div>
+            <div class="row p-3">
+                <div class="col-md-3">
+                    {{ customer_form.customer_name.label_tag }}
+                    <span class="text-danger">{{ customer_form.customer_name.errors|join:", " }}</span>
+                    {{ customer_form.customer_name }}
+                </div>
+                <div class="col-md-3">
+                    {{ customer_form.customer_phone.label_tag }}
+                    <span class="text-danger">{{ customer_form.customer_phone.errors|join:", " }}</span>
+                    {{ customer_form.customer_phone }}
+                </div>
+                <div class="col-md-3">
+                    {{ customer_form.customer_address.label_tag }}
+                    <span class="text-danger">{{ customer_form.customer_address.errors|join:", " }}</span>
+                    {{ customer_form.customer_address }}
+                </div>
+                <div class="col-md-3">
+                    {{ customer_form.gstin.label_tag }}
+                    <span class="text-danger">{{ customer_form.gstin.errors|join:", " }}</span>
+                    {{ customer_form.gstin }}
+                </div>
+                <input type="hidden" name="customer_id" id="customer_id">
+            </div>
+        </div>
+
+        <!-- Sales Items -->
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Items</h6>
+                <button type="button" class="btn btn-sm btn-success" id="addRow">+ Add Row</button>
+            </div>
+            <div class="card-body">
+                {{ formset.management_form }}
+                {{ formset.non_form_errors }}
+                <table class="table table-bordered" id="salesTable">
+                    <thead>
+                        <tr>
+                            <th>Item Code</th>
+                            <th>Item Name</th>
+                            <th>Price per Unit</th>
+                            <th>Qty</th>
+                            <th>Net Wt</th>
+                            <th>Tax %</th>
+                            <th>Total</th>
+                            <th>Remove</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for form in formset %}
+                        <tr>
+                            <td>
+                                <input type="text" name="{{ form.prefix }}-item_code" class="form-control item-code" autocomplete="off">
+                            </td>
+                            <td>
+                                <input type="text" name="{{ form.prefix }}-item_name" class="form-control item-name" autocomplete="off">
+                            </td>
+                            <td>
+                                <span class="text-danger">{{ form.price_per_unit.errors|join:", " }}</span>
+                                {{ form.price_per_unit }}
+                            </td>
+                            <td>
+                                <span class="text-danger">{{ form.qty.errors|join:", " }}</span>
+                                {{ form.qty }}
+                            </td>
+                            <td>
+                                <span class="text-danger">{{ form.net_weight.errors|join:", " }}</span>
+                                {{ form.net_weight }}
+                            </td>
+                            <td>
+                                <span class="text-danger">{{ form.tax_percentage.errors|join:", " }}</span>
+                                {{ form.tax_percentage }}
+                            </td>
+                            <td>
+                                <span class="text-danger">{{ form.total_amount.errors|join:", " }}</span>
+                                {{ form.total_amount }}
+                            </td>
+                            <td style="display:none;">{{ form.item }}</td>
+                            <td style="display:none;">{{ form.DELETE }}</td>
+                            <td><button type="button" class="btn btn-danger btn-sm remove-row">X</button></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                <div class="row mt-3">
+                    <div class="col-md-3">
+                        {{ form.tax_amount.label_tag }}
+                        <span class="text-danger">{{ form.tax_amount.errors|join:", " }}</span>
+                        {{ form.tax_amount }}
+                    </div>
+                    <div class="col-md-3">
+                        {{ form.payment_mode.label_tag }}
+                        <span class="text-danger">{{ form.payment_mode.errors|join:", " }}</span>
+                        {{ form.payment_mode }}
+                    </div>
+                    <div class="col-md-3">
+                        {{ form.grand_total.label_tag }}
+                        <span class="text-danger">{{ form.grand_total.errors|join:", " }}</span>
+                        {{ form.grand_total }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Buttons -->
+        <div class="d-flex justify-content-end mb-4">
+            <button type="submit" class="btn btn-primary btn-sm mr-2">Save</button>
+            <a href="{% url 'dashboard' %}" class="btn btn-secondary btn-sm">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/smoothness/jquery-ui.css">
+<script>
+function updateTotalsAndFields() {
+    let rows = document.querySelectorAll("#salesTable tbody tr");
+    let grandTotal = 0, totalTax = 0;
+
+    rows.forEach(row => {
+        if (row.dataset.deleted === "true") return;
+
+        let priceInput = row.querySelector("[name$='price_per_unit']");
+        let taxSelect = row.querySelector("[name$='tax_percentage']");
+        let qtyInput = row.querySelector("[name$='qty']");
+        let netWeightInput = row.querySelector("[name$='net_weight']");
+        let totalInput = row.querySelector("[name$='total_amount']");
+        let itemInput = row.querySelector("[name$='item']");
+
+        let isWeightBased = false;
+        if (itemInput.value) {
+            $.ajax({
+                url: '/accounts/api/item-details/' + itemInput.value + '/',
+                type: 'GET',
+                dataType: 'json',
+                async: false,
+                success: function(data) {
+                    isWeightBased = data.is_weight_based;
+                }
+            });
+        }
+
+        let price = parseFloat(priceInput.value) || 0;
+        let tax = parseFloat(taxSelect.value) || 0;
+        let qty = parseFloat(qtyInput.value) || 0;
+        let netWeight = parseFloat(netWeightInput.value) || 0;
+
+        let rowTotal = 0;
+        if (isWeightBased) {
+            qtyInput.readOnly = true;
+            qtyInput.value = "0";
+            netWeightInput.readOnly = false;
+            rowTotal = (price * netWeight) * (1 + tax / 100);
+        } else {
+            qtyInput.readOnly = false;
+            netWeightInput.readOnly = true;
+            netWeightInput.value = "0.00";
+            rowTotal = (price * qty) * (1 + tax / 100);
+        }
+
+        totalInput.value = isNaN(rowTotal) ? "0.00" : rowTotal.toFixed(2);
+
+        grandTotal += rowTotal;
+        totalTax += (price * (isWeightBased ? netWeight : qty) * tax / 100);
+    });
+
+    document.querySelector("#id_tax_amount").value = isNaN(totalTax) ? "0.00" : totalTax.toFixed(2);
+    document.querySelector("#id_grand_total").value = isNaN(grandTotal) ? "0.00" : grandTotal.toFixed(2);
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    updateTotalsAndFields();
+
+    // Customer name autocomplete
+    $("#customer_name").autocomplete({
+        source: function(request, response) {
+            $.get('/accounts/api/search_customers/', {type: 'name', q: request.term}, function(data) {
+                response(data.map(function(c) {
+                    return {label: c.name + ' (' + c.phone + ')', value: c.name, customer: c};
+                }));
+            });
+        },
+        select: function(event, ui) {
+            var c = ui.item.customer;
+            $("#customer_id").val(c.id);
+            $("#id_customer_phone").val(c.phone);
+            $("#id_customer_address").val(c.address);
+            $("#id_gstin").val(c.gstin);
+        }
+    });
+
+    // Customer phone autocomplete
+    $("#id_customer_phone").autocomplete({
+        source: function(request, response) {
+            $.get('/accounts/api/search_customers/', {type: 'phone', q: request.term}, function(data) {
+                response(data.map(function(c) {
+                    return {label: c.phone + ' (' + c.name + ')', value: c.phone, customer: c};
+                }));
+            });
+        },
+        select: function(event, ui) {
+            var c = ui.item.customer;
+            $("#customer_id").val(c.id);
+            $("#id_customer_name").val(c.name);
+            $("#id_customer_address").val(c.address);
+            $("#id_gstin").val(c.gstin);
+        }
+    });
+
+    // Item name autocomplete
+    $(document).on("focus", ".item-name", function() {
+        if (!$(this).data("ui-autocomplete")) {
+            $(this).autocomplete({
+                source: function(request, response) {
+                    $.get('/accounts/api/search_items/', {q: request.term}, function(data) {
+                        response(data.map(function(item) {
+                            return {label: item.name + ' (' + item.code + ')', value: item.name, item: item};
+                        }));
+                    });
+                },
+                select: function(event, ui) {
+                    var item = ui.item.item;
+                    var row = $(this).closest('tr');
+                    row.find('.item-code').val(item.code);
+                    row.find('[name$="price_per_unit"]').val(item.price);
+                    row.find('[name$="item"]').val(item.id);
+                    updateTotalsAndFields();
+                }
+            });
+        }
+    });
+
+    // Item by code
+    $(document).on("change", ".item-code", function() {
+        var code = $(this).val();
+        if (code) {
+            var row = $(this).closest('tr');
+            $.get('/accounts/api/item_by_code/', {code: code}, function(data) {
+                if (!data.error) {
+                    row.find('.item-name').val(data.name);
+                    row.find('[name$="price_per_unit"]').val(data.price);
+                    row.find('[name$="item"]').val(data.id);
+                    updateTotalsAndFields();
+                } else {
+                    alert('Item not found');
+                }
+            });
+        }
+    });
+
+    // Update totals on input/change
+    $(document).on("input change", "input, select", function() {
+        if ($(this).closest("tr").length) updateTotalsAndFields();
+    });
+
+    // Add Row
+    $("#addRow").click(function() {
+        let table = $("#salesTable tbody");
+        let totalForms = $("#id_form-TOTAL_FORMS");
+        let formNum = parseInt(totalForms.val());
+        let firstRow = table.find("tr:first");
+        if (!firstRow.length) return;
+
+        let newRow = firstRow.clone(true);
+        newRow.attr('data-deleted', "false");
+
+        newRow.find("input, select").each(function() {
+            let name = $(this).attr("name");
+            if (name) {
+                let newName = name.replace(/form-(\d+)-/, `form-${formNum}-`);
+                $(this).attr("name", newName);
+                $(this).attr("id", `id_${newName}`);
+            }
+            if ($(this).attr("type") !== "hidden") $(this).val("");
+            if ($(this).is("select")) $(this).prop("selectedIndex", 0);
+        });
+
+        table.append(newRow);
+        totalForms.val(formNum + 1);
+        updateTotalsAndFields();
+    });
+
+    // Remove Row
+    $(document).on("click", ".remove-row", function() {
+        let row = $(this).closest("tr");
+        row.attr('data-deleted', "true");
+        row.hide();
+        row.find("input[name$='-DELETE']").prop("checked", true);
+        updateTotalsAndFields();
+    });
+});
+</script>
+{% endblock %}

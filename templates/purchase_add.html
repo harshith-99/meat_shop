@@ -1,0 +1,379 @@
+{% load static %}
+{% include "sidebar/sidebar.html" %}
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">Add Purchase</h1>
+
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+
+    <form method="post">
+        {% csrf_token %}
+
+        <!-- Purchase Info -->
+        <div class="card shadow mb-4">
+            {{ form.non_field_errors }}
+            <div class="row p-3">
+                <div class="col-md-3">
+                    {{ form.invoice_number.label_tag }}
+                    <span class="text-danger">{{ form.invoice_number.errors|join:", " }}</span>
+                    {{ form.invoice_number }}
+                </div>
+                <div class="col-md-3">
+                    {{ form.purchase_date.label_tag }}
+                    <span class="text-danger">{{ form.purchase_date.errors|join:", " }}</span>
+                    {{ form.purchase_date }}
+                </div>
+                <div class="col-md-3">
+                    {{ form.supplier.label_tag }}
+                    <span class="text-danger">{{ form.supplier.errors|join:", " }}</span>
+                    {{ form.supplier }}
+                </div>
+                <div class="col-md-3">
+                    {{ form.branch.label_tag }}
+                    <span class="text-danger">{{ form.branch.errors|join:", " }}</span>
+                    {{ form.branch }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Purchase Items -->
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Items</h6>
+                <button type="button" class="btn btn-sm btn-success" id="addRow">+ Add Row</button>
+            </div>
+            <div class="card-body">
+                {{ formset.management_form }}
+                {{ formset.non_form_errors }}
+                <table class="table table-bordered" id="purchaseTable">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Category</th>
+                            <th>Item</th>
+                            <th>Tax %</th>
+                            <th>Purchase Price</th>
+                            <th>Qty</th>
+                            <th>Gross Wt</th>
+                            <th>Empty Wt</th>
+                            <th>Net Wt</th>
+                            <th>Total</th>
+                            <th>Remove</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for form in formset %}
+                        <tr>
+                            {% for field in form.visible_fields %}
+                                {% if field.name == "purchase_type" %}
+                                    <td>
+                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
+                                        {{ field }}
+                                    </td>
+                                {% elif field.name == "category" %}
+                                    <td>
+                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
+                                        {{ field }}
+                                    </td>
+                                {% elif field.name == "item" %}
+                                    <td>
+                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
+                                        {{ field }}
+                                    </td>
+                                {% elif field.name == "tax_percentage" %}
+                                    <td>
+                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
+                                        {{ field }}
+                                    </td>
+                                {% elif field.name == "purchase_price" %}
+                                    <td>
+                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
+                                        {{ field }}
+                                    </td>
+                                {% elif field.name == "qty" %}
+                                    <td>
+                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
+                                        {{ field }}
+                                    </td>
+                                {% elif field.name == "gross_weight" %}
+                                    <td>
+                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
+                                        {{ field }}
+                                    </td>
+                                {% elif field.name == "empty_weight" %}
+                                    <td>
+                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
+                                        {{ field }}
+                                    </td>
+                                {% elif field.name == "net_weight" %}
+                                    <td>
+                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
+                                        {{ field }}
+                                    </td>
+                                {% elif field.name == "total_amount" %}
+                                    <td>
+                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
+                                        {{ field }}
+                                    </td>
+                                {% endif %}
+                            {% endfor %}
+                            <!-- Ensure is_weight_based is always rendered -->
+                            <td style="display:none;">{{ form.is_weight_based }}</td>
+                            <td style="display:none;">{{ form.DELETE }}</td>
+                            <td><button type="button" class="btn btn-danger btn-sm remove-row">X</button></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                <div class="row mt-3">
+                    <div class="col-md-3">
+                        {{ form.tax_amount.label_tag }}
+                        <span class="text-danger">{{ form.tax_amount.errors|join:", " }}</span>
+                        {{ form.tax_amount }}
+                    </div>
+                    <div class="col-md-3">
+                        {{ form.grand_total.label_tag }}
+                        <span class="text-danger">{{ form.grand_total.errors|join:", " }}</span>
+                        {{ form.grand_total }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Buttons -->
+        <div class="d-flex justify-content-end mb-4">
+            <button type="submit" class="btn btn-primary btn-sm mr-2">Save</button>
+            <a href="{% url 'dashboard' %}" class="btn btn-secondary btn-sm">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+var resetFormString = "{{ reset_form|yesno:'true,false' }}";
+var resetForm = (resetFormString === "true");
+
+// Function to update item options based on category
+function updateItems(categoryId, $itemSelect) {
+    console.log("Category ID:", categoryId);
+    if (!categoryId) {
+        $itemSelect.empty().append('<option value="">---------</option>');
+        return;
+    }
+    $.ajax({
+        url: '/accounts/api/items-by-category/' + categoryId + '/',
+        type: 'GET',
+        dataType: 'json',
+        beforeSend: function(xhr, settings) {
+            xhr.setRequestHeader("X-CSRFToken", $('input[name=csrfmiddlewaretoken]').val());
+        },
+        success: function(data) {
+            console.log("Data received:", data);
+            $itemSelect.empty().append('<option value="">---------</option>');
+            $.each(data, function(index, item) {
+                $itemSelect.append('<option value="' + item.id + '">' + item.name + '</option>');
+            });
+        },
+        error: function(jqXHR, textStatus, errorThrown) {
+            console.error("AJAX error:", textStatus, errorThrown);
+            $itemSelect.empty().append('<option value="">Error loading items</option>');
+        }
+    });
+}
+
+function updateTotalsAndFields() {
+    console.log("Updating totals...");
+    let rows = document.querySelectorAll("#purchaseTable tbody tr");
+    let grandTotal = 0, totalTax = 0;
+
+    rows.forEach(row => {
+        if (row.dataset.deleted === "true") return;
+
+        // Query fields
+        let priceInput = row.querySelector("[name$='purchase_price']");
+        let taxSelect = row.querySelector("[name$='tax_percentage']");
+        let qtyInput = row.querySelector("[name$='qty']");
+        let grossInput = row.querySelector("[name$='gross_weight']");
+        let emptyInput = row.querySelector("[name$='empty_weight']");
+        let netWeightInput = row.querySelector("[name$='net_weight']");
+        let totalInput = row.querySelector("[name$='total_amount']");
+        let isWeightBasedInput = row.querySelector("[name$='is_weight_based']");
+
+        // Fallback if is_weight_based is missing
+        let isWeightBased = isWeightBasedInput && isWeightBasedInput.value.toLowerCase() === 'true';
+
+        // Initialize values with fallbacks
+        let price = parseFloat(priceInput.value) || 0;
+        let tax = parseFloat(taxSelect.value) || 0;
+        let qty = parseFloat(qtyInput.value) || 0;
+        let gross = parseFloat(grossInput.value) || 0;
+        let empty = parseFloat(emptyInput.value) || 0;
+
+        // Calculate net weight
+        let netWeight = gross - empty;
+        netWeightInput.value = isNaN(netWeight) ? "0.00" : netWeight.toFixed(2);
+        // Update field states and calculate row total
+        let rowTotal = 0;
+        if (isWeightBased) {
+            qtyInput.readOnly = false;
+            // qtyInput.value = "0";
+            grossInput.readOnly = false;
+            emptyInput.readOnly = false;
+            // netWeightInput.disabled = true;
+            rowTotal = (price * netWeight) * (1 + tax / 100); // Include tax in total
+            console.log("Weight-based row total:", rowTotal);
+        } else {
+            qtyInput.readOnly = false;
+            grossInput.value ="0";
+            emptyInput.value ="0";
+            netWeightInput.value ="0";
+            grossInput.readOnly = true;
+            emptyInput.readOnly = true;
+            netWeightInput.readOnly = true;
+            netWeightInput.value = "0.00";
+            rowTotal = (price * qty) * (1 + tax / 100); // Include tax in total
+            console.log("Qty-based row total:", rowTotal);
+        }
+
+        // Update total amount for the row
+        totalInput.value = isNaN(rowTotal) ? "0.00" : rowTotal.toFixed(2);
+
+        // Accumulate totals
+        grandTotal += rowTotal;
+        totalTax += (price * (isWeightBased ? netWeight : qty) * tax / 100);
+    });
+
+    // Update form totals
+    let taxAmountInput = document.querySelector("#id_tax_amount");
+    let grandTotalInput = document.querySelector("#id_grand_total");
+    if (taxAmountInput) taxAmountInput.value = isNaN(totalTax) ? "0.00" : totalTax.toFixed(2);
+    if (grandTotalInput) grandTotalInput.value = isNaN(grandTotal) ? "0.00" : grandTotal.toFixed(2);
+    console.log("Grand Total:", grandTotal, "Tax Amount:", totalTax);
+}
+
+// Initialize form on DOM load
+document.addEventListener("DOMContentLoaded", function() {
+    if (resetForm) {
+        let rows = document.querySelectorAll("#purchaseTable tbody tr");
+        if (rows.length > 1) {
+            rows.forEach((row, index) => {
+                if (index > 0) row.remove();
+            });
+        }
+        let totalForms = document.querySelector("#id_form-TOTAL_FORMS");
+        totalForms.value = 1;
+        rows.forEach(row => {
+            row.querySelectorAll("input[type='text'], input[type='number'], select").forEach(el => {
+                if (!el.name.includes("TOTAL_FORMS") && !el.name.includes("INITIAL_FORMS") && !el.name.includes("MIN_NUM_FORMS") && !el.name.includes("MAX_NUM_FORMS")) {
+                    el.value = "";
+                }
+            });
+            row.querySelectorAll("select").forEach(el => el.selectedIndex = 0);
+        });
+        updateTotalsAndFields();
+    } else {
+        updateTotalsAndFields();
+    }
+
+    $('.category-select').each(function() {
+        var $category = $(this);
+        var $item = $category.closest('tr').find('.item-select');
+        updateItems($category.val(), $item);
+    });
+});
+
+// Update items when category changes
+document.addEventListener("change", function(e) {
+    if (e.target.classList.contains("category-select")) {
+        var $category = $(e.target);
+        var $item = $category.closest('tr').find('.item-select');
+        var $row = $category.closest('tr');
+        var isWeightBasedInput = $row.find("[name$='is_weight_based']");
+
+        updateItems($category.val(), $item);
+        
+        if ($category.val()) {
+            $.ajax({
+                url: '/accounts/api/category-details/' + $category.val() + '/',
+                type: 'GET',
+                dataType: 'json',
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader("X-CSRFToken", $('input[name=csrfmiddlewaretoken]').val());
+                },
+                success: function(data) {
+                    if (isWeightBasedInput.length && data.is_weight_based !== undefined) {
+                        isWeightBasedInput.val(data.is_weight_based.toString().toLowerCase());
+                    }
+                    updateTotalsAndFields();
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    console.error("Error fetching category details:", textStatus, errorThrown);
+                    if (isWeightBasedInput.length) {
+                        isWeightBasedInput.val('false');
+                    }
+                    updateTotalsAndFields();
+                }
+            });
+        } else {
+            if (isWeightBasedInput.length) {
+                isWeightBasedInput.val('false');
+            }
+            updateTotalsAndFields();
+        }
+    } else {
+        updateTotalsAndFields();
+    }
+});
+
+// Update totals on input change
+document.addEventListener("input", function(e) {
+    const row = e.target.closest("tr");
+    if (!row || row.dataset.deleted === "true") return;
+    updateTotalsAndFields();
+});
+
+// Add Row
+document.getElementById("addRow").addEventListener("click", function() {
+    let table = document.querySelector("#purchaseTable tbody");
+    let totalForms = document.querySelector("#id_form-TOTAL_FORMS");
+    let formNum = parseInt(totalForms.value);
+    let firstRow = table.querySelector("tr:first-child");
+    if (!firstRow) return;
+
+    let newRow = firstRow.cloneNode(true);
+    newRow.dataset.deleted = "false";
+
+    newRow.querySelectorAll("input, select").forEach(el => {
+        let name = el.getAttribute("name");
+        if (name) {
+            let newName = name.replace(/form-(\d+)-/, `form-${formNum}-`);
+            el.setAttribute("name", newName);
+            el.setAttribute("id", `id_${newName}`);
+        }
+        if (el.type !== "hidden") el.value = "";
+        if (el.type === "checkbox") el.checked = false;
+        if (el.type === "select-one") el.selectedIndex = 0;
+    });
+
+    table.appendChild(newRow);
+    totalForms.value = formNum + 1;
+    updateItems(newRow.querySelector(".category-select").value, newRow.querySelector(".item-select"));
+    updateTotalsAndFields();
+});
+
+// Remove Row
+document.addEventListener("click", function(e) {
+    if (e.target.classList.contains("remove-row")) {
+        const row = e.target.closest("tr");
+        row.dataset.deleted = "true";
+        row.style.display = "none";
+        const deleteInput = row.querySelector("input[name$='-DELETE']");
+        if (deleteInput) deleteInput.checked = true;
+        updateTotalsAndFields();
+    }
+});
+</script>
+{% endblock %}

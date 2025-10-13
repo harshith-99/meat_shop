@@ -1,0 +1,43 @@
+{% load static %}
+{% include "sidebar\sidebar.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h2>Branch List</h2>
+    {% if  request.user.role == 'super_admin' %}
+        <a href="{% url 'branch_add' %}" class="btn btn-success mb-3">+ Add Branch</a>
+    {% endif %}
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <!-- <th>ID</th> -->
+                <th>Branch Name</th>
+                <th>Branch Address</th>
+                {% if request.user.role == 'super_admin' %}
+                    <th>Actions</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for b in branches %}
+            <tr>
+                <!-- <td>{{ b.branch_id }}</td> -->
+                <td>{{ b.branch_name }}</td>
+                <td>{{ b.branch_address }}</td>
+        
+                {% if request.user.role == 'super_admin' %} 
+                    <td>
+                        <a href="{% url 'branch_update' b.branch_id %}" class="btn btn-warning btn-sm">Update</a>
+                        <a href="{% url 'branch_delete' b.branch_id %}" class="btn btn-danger btn-sm"
+                           onclick="return confirm('Are you sure you want to delete this Branch?');">
+                           Delete
+                        </a>
+                    </td>
+                {% endif %}
+            </tr>
+            {% empty %}
+            <tr><td colspan="7">No Branch found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
