@@ -2,7 +2,7 @@
 {% include "sidebar/sidebar.html" %}
 {% block content %}
 <div class="container-fluid">
-    <h1 class="h3 mb-4 text-gray-800">Retail Sales</h1>
+    <h1 class="h3 mb-4 text-gray-800">Wholesale Sales</h1>
 
     {% for message in messages %}
     <div class="alert alert-{{ message.tags }}">{{ message }}</div>
@@ -142,6 +142,11 @@
                         {{ form.payment_mode.label_tag }}
                         <span class="text-danger">{{ form.payment_mode.errors|join:", " }}</span>
                         {{ form.payment_mode }}
+                    </div>
+                    <div class="col-md-3">
+                        {{ form.paid_amount.label_tag }}
+                        <span class="text-danger">{{ form.paid_amount.errors|join:", " }}</span>
+                        {{ form.paid_amount }}
                     </div>
                     <div class="col-md-3">
                         {{ form.grand_total.label_tag }}

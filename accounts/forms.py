@@ -1,6 +1,7 @@
 from django import forms
-from .models import Branch, Purchase, PurchaseDetail, Supplier, ItemCategory,Item,RetailSales,RetailSalesDetails,Customer
+from .models import Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails
 from django.forms import modelformset_factory
+from django.core.exceptions import ValidationError
 
 class SupplierForm(forms.ModelForm):
     supplier_name = forms.CharField(
@@ -60,8 +61,6 @@ class BranchForm(forms.ModelForm):
         model = Branch
         fields = ['branch_name', 'branch_address']
 
-
-
 class ItemCategoryForm(forms.ModelForm):
     category_name = forms.CharField(
         widget=forms.TextInput(attrs={
@@ -97,7 +96,6 @@ class ItemForm(forms.ModelForm):
             'autocomplete': 'off'
         })
     )
-
     code = forms.CharField(
         widget=forms.TextInput(attrs={
             'class': 'form-control',
@@ -106,12 +104,10 @@ class ItemForm(forms.ModelForm):
             'autocomplete': 'off'
         })
     )
-
     category = forms.ModelChoiceField(
         queryset=ItemCategory.objects.all(),
         widget=forms.Select(attrs={'class': 'form-control'})
     )
-
     price_per_unit_retail = forms.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -122,7 +118,6 @@ class ItemForm(forms.ModelForm):
             'step': '0.01'
         })
     )
-
     price_per_unit_wholesale = forms.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -133,7 +128,6 @@ class ItemForm(forms.ModelForm):
             'step': '0.01'
         })
     )
-
     unit = forms.ChoiceField(
         choices=[
             ('kg', 'Kilogram'),
@@ -143,7 +137,6 @@ class ItemForm(forms.ModelForm):
         ],
         widget=forms.Select(attrs={'class': 'form-control'})
     )
-
     stock = forms.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -158,7 +151,6 @@ class ItemForm(forms.ModelForm):
     class Meta:
         model = Item
         fields = ['name', 'code', 'category', 'price_per_unit_retail', 'price_per_unit_wholesale', 'unit', 'stock']
-
 
 class PurchaseForm(forms.ModelForm):
     class Meta:
@@ -178,7 +170,7 @@ class PurchaseForm(forms.ModelForm):
     branch = forms.ModelChoiceField(
         queryset=Branch.objects.all(),
         widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'}),
-        required=False
+        required=True
     )
     tax_amount = forms.DecimalField(
         widget=forms.NumberInput(attrs={'class': 'form-control', 'readonly': True, 'autocomplete': 'off'}),
@@ -188,6 +180,19 @@ class PurchaseForm(forms.ModelForm):
         widget=forms.NumberInput(attrs={'class': 'form-control', 'readonly': True, 'autocomplete': 'off'}),
         required=False
     )
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+        if user and user.role == 'staff' and user.branch:
+            self.fields['branch'].initial = user.branch
+            self.fields['branch'].widget = forms.HiddenInput()
+
+    def clean_branch(self):
+        branch = self.cleaned_data.get('branch')
+        if not branch:
+            raise ValidationError("Branch selection is required.")
+        return branch
 
 class PurchaseDetailForm(forms.ModelForm):
     class Meta:
@@ -214,10 +219,10 @@ class PurchaseDetailForm(forms.ModelForm):
     )
     purchase_price = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'required': 'true', 'autocomplete': 'off'}))
     qty = forms.IntegerField(widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}))
-    gross_weight = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control',  'autocomplete': 'off'}))
+    gross_weight = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}))
     empty_weight = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}))
     net_weight = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}))
-    total_amount = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'required': 'true','readonly': 'true', 'autocomplete': 'off'}))
+    total_amount = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'required': 'true', 'readonly': 'true', 'autocomplete': 'off'}))
     is_weight_based = forms.CharField(widget=forms.HiddenInput(), required=False)
 
     def __init__(self, *args, **kwargs):
@@ -248,7 +253,6 @@ PurchaseDetailFormSet = modelformset_factory(
     PurchaseDetail, form=PurchaseDetailForm, extra=1, can_delete=True
 )
 
-# New CustomerForm
 class CustomerForm(forms.ModelForm):
     class Meta:
         model = Customer
@@ -288,7 +292,6 @@ class CustomerForm(forms.ModelForm):
                 raise forms.ValidationError("A customer with this phone number already exists.")
         return cleaned_data
 
-# RetailSalesForm and RetailSalesDetailForm (unchanged from previous)
 class RetailSalesForm(forms.ModelForm):
     class Meta:
         model = RetailSales
@@ -303,7 +306,7 @@ class RetailSalesForm(forms.ModelForm):
     branch = forms.ModelChoiceField(
         queryset=Branch.objects.all(),
         widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'}),
-        required=False
+        required=True
     )
     tax_amount = forms.DecimalField(
         widget=forms.NumberInput(attrs={'class': 'form-control', 'readonly': True, 'autocomplete': 'off'}),
@@ -318,10 +321,23 @@ class RetailSalesForm(forms.ModelForm):
         widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'})
     )
 
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+        if user and user.role == 'staff' and user.branch:
+            self.fields['branch'].initial = user.branch
+            self.fields['branch'].widget = forms.HiddenInput()
+
+    def clean_branch(self):
+        branch = self.cleaned_data.get('branch')
+        if not branch:
+            raise ValidationError("Branch selection is required.")
+        return branch
+
 class RetailSalesDetailForm(forms.ModelForm):
     class Meta:
         model = RetailSalesDetails
-        fields = ['item', 'tax_percentage', 'price_per_unit', 'qty', 'net_weight', 'total_amount']
+        fields = ['item', 'tax_percentage', 'price_per_unit', 'qty', 'net_weight', 'token', 'total_amount']
 
     item = forms.ModelChoiceField(
         queryset=Item.objects.all(),
@@ -329,7 +345,7 @@ class RetailSalesDetailForm(forms.ModelForm):
     )
     tax_percentage = forms.ChoiceField(
         choices=[('0', '0%'), ('12', '12%'), ('18', '18%')],
-        widget=forms.Select(attrs={'class': 'form-control'}),
+        widget=forms.Select(attrs={'class': 'form-control', 'style': 'width: fit-content;'}),
         initial='0'
     )
     price_per_unit = forms.DecimalField(
@@ -341,6 +357,10 @@ class RetailSalesDetailForm(forms.ModelForm):
     net_weight = forms.DecimalField(
         widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'})
     )
+    token = forms.IntegerField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+        required=False
+    )
     total_amount = forms.DecimalField(
         widget=forms.NumberInput(attrs={'class': 'form-control', 'readonly': True, 'autocomplete': 'off'})
     )
@@ -349,3 +369,96 @@ RetailSalesDetailFormSet = modelformset_factory(
     RetailSalesDetails, form=RetailSalesDetailForm, extra=1, can_delete=True
 )
 
+class WholesaleSalesForm(forms.ModelForm):
+    class Meta:
+        model = WholesaleSales
+        fields = ['receipt_no', 'sales_date', 'branch', 'tax_amount', 'grand_total', 'payment_mode', 'paid_amount']
+
+    receipt_no = forms.CharField(
+        widget=forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+        required=True
+    )
+    sales_date = forms.DateField(
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control', 'autocomplete': 'off'})
+    )
+    branch = forms.ModelChoiceField(
+        queryset=Branch.objects.all(),
+        widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+        required=True
+    )
+    tax_amount = forms.DecimalField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'readonly': True, 'autocomplete': 'off'}),
+        required=False
+    )
+    grand_total = forms.DecimalField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'readonly': True, 'autocomplete': 'off'}),
+        required=False
+    )
+    payment_mode = forms.ChoiceField(
+        choices=(('pending', 'Pending'), ('cash', 'Cash'), ('online', 'Online')),
+        widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+        initial='pending'
+    )
+    paid_amount = forms.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+        required=True
+    )
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+        if user and user.role == 'staff' and user.branch:
+            self.fields['branch'].initial = user.branch
+            self.fields['branch'].widget = forms.HiddenInput()
+
+    def clean_branch(self):
+        branch = self.cleaned_data.get('branch')
+        if not branch:
+            raise ValidationError("Branch selection is required.")
+        return branch
+
+    def clean(self):
+        cleaned_data = super().clean()
+        paid_amount = cleaned_data.get('paid_amount')
+        grand_total = cleaned_data.get('grand_total')
+        if paid_amount and grand_total and paid_amount > grand_total:
+            raise ValidationError("Paid amount cannot be greater than the grand total.")
+        return cleaned_data
+
+class WholesaleSalesDetailForm(forms.ModelForm):
+    class Meta:
+        model = WholesaleSalesDetails
+        fields = ['item', 'tax_percentage', 'price_per_unit', 'qty', 'net_weight', 'token', 'total_amount']
+
+    item = forms.ModelChoiceField(
+        queryset=Item.objects.all(),
+        widget=forms.HiddenInput()
+    )
+    tax_percentage = forms.ChoiceField(
+        choices=[('0', '0%'), ('12', '12%'), ('18', '18%')],
+        widget=forms.Select(attrs={'class': 'form-control', 'style': 'width: fit-content;'}),
+        initial='0'
+    )
+    price_per_unit = forms.DecimalField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'readonly': True, 'autocomplete': 'off'})
+    )
+    qty = forms.IntegerField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'})
+    )
+    net_weight = forms.DecimalField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'})
+    )
+    token = forms.CharField(
+        widget=forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+        required=False,
+        max_length=50
+    )
+    total_amount = forms.DecimalField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'readonly': True, 'autocomplete': 'off'})
+    )
+
+WholesaleSalesDetailFormSet = modelformset_factory(
+    WholesaleSalesDetails, form=WholesaleSalesDetailForm, extra=1, can_delete=True
+)

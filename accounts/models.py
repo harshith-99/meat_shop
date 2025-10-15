@@ -120,8 +120,40 @@ class RetailSalesDetails(models.Model):
     item = models.ForeignKey(Item, on_delete=models.CASCADE)
     qty = models.PositiveIntegerField()
     net_weight = models.DecimalField(max_digits=10, decimal_places=2)
+    token = models.CharField(max_length=50, null=True, blank=True)
     tax_percentage = models.DecimalField(max_digits=5, decimal_places=2)
     price_per_unit = models.DecimalField(max_digits=10, decimal_places=2)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
     
-    
+class WholesaleSales(models.Model):
+    receipt_no = models.CharField(max_length=20, unique=True)
+    sales_date = models.DateField()
+    created_date = models.DateTimeField(auto_now_add=True)
+    customer = models.ForeignKey(Customer, on_delete=models.PROTECT)
+    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, default=0)
+    grand_total = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, default=0)
+    added_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='wholesale_sales_added')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='wholesale_sales_updated', null=True, blank=True)
+    deleted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='wholesale_sales_deleted', null=True, blank=True)
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT)
+    delete_status = models.BooleanField(default=False)
+    payment_mode = models.CharField(
+        max_length=20,
+        choices=(('pending', 'Pending'), ('cash', 'Cash'), ('online', 'Online')),
+        default='pending'
+    )
+    paid_amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    def clean(self):
+        if self.paid_amount > self.grand_total:
+            raise ValidationError("Paid amount cannot be greater than the grand total.")
+
+class WholesaleSalesDetails(models.Model):
+    sales = models.ForeignKey(WholesaleSales, on_delete=models.CASCADE, related_name='details')
+    item = models.ForeignKey(Item, on_delete=models.CASCADE)
+    qty = models.PositiveIntegerField()
+    net_weight = models.DecimalField(max_digits=10, decimal_places=2)
+    token = models.CharField(max_length=50, null=True, blank=True)
+    tax_percentage = models.DecimalField(max_digits=5, decimal_places=2)
+    price_per_unit = models.DecimalField(max_digits=10, decimal_places=2)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2)

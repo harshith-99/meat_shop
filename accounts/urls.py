@@ -39,6 +39,9 @@ urlpatterns = [
     # Retail Sales URLs
     path('sales/add/', views.retail_sales_add, name='retail_sales_add'),
 
+    # Wholesale Sales URLs
+    path('wholesale-sales/add/', views.wholesale_sales_add, name='wholesale_sales_add'),
+
     #api URL
     path('api/items-by-category/<int:category_id>/', views.items_by_category, name='items_by_category'),
     path('api/category-details/<int:category_id>/', views.category_details, name='category_details'),
