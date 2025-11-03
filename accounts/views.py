@@ -1,4 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
+from django.db.models import Sum, F, Q
 from django.contrib import messages
 from django.forms import modelformset_factory
 from django.contrib.auth import authenticate, login, logout
@@ -6,13 +7,13 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.db import transaction
 from decimal import Decimal, InvalidOperation
-from .forms import PurchaseForm, PurchaseDetailFormSet, ItemCategoryForm, BranchForm, SupplierForm, ItemForm, RetailSalesForm, RetailSalesDetailFormSet, CustomerForm, WholesaleSalesForm, WholesaleSalesDetailFormSet
-from .models import Purchase, PurchaseDetail, Branch, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails
+from .forms import PurchaseForm, PurchaseDetailFormSet, ItemCategoryForm, BranchForm, SupplierForm, ItemForm, RetailSalesForm, RetailSalesDetailFormSet, CustomerForm, WholesaleSalesForm, WholesaleSalesDetailFormSet,SupplierpayForm
+from .models import Purchase, PurchaseDetail, Branch, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay
 import logging
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from django.http import HttpRequest
-import datetime
+from datetime import datetime, date
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,112 @@ def supplier_add(request):
     else:
         form = SupplierForm()
     return render(request, "supplier_add.html", {"form": form})
+
+@login_required
+def supplier_pay(request):
+    if request.method == "POST":
+        form = SupplierpayForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Payment recorded successfully!")
+            return redirect("supplier_pay")
+        else:
+            messages.error(request, "Please correct the errors below.")
+    else:
+        form = SupplierpayForm()
+
+    return render(request, "supplier_pay.html", {"form": form})
+
+@login_required
+def supplier_payment_list(request):
+    is_manager = request.user.role in ['manager', 'admin', 'super_admin']
+
+    supplier_id = request.GET.get('supplier')
+    from_date = request.GET.get('from_date')
+    to_date = request.GET.get('to_date')
+
+    payments = Supplierpay.objects.filter(delete_status=False)
+
+    if supplier_id:
+        payments = payments.filter(supplier_id=supplier_id)  # OK: FK on Supplierpay
+
+    if from_date:
+        try:
+            from_date = datetime.strptime(from_date, '%Y-%m-%d').date()
+            payments = payments.filter(payment_date__gte=from_date)
+        except ValueError:
+            pass
+
+    if to_date:
+        try:
+            to_date = datetime.strptime(to_date, '%Y-%m-%d').date()
+            payments = payments.filter(payment_date__lte=to_date)
+        except ValueError:
+            pass
+
+    payments = payments.select_related('supplier').order_by('-payment_date')
+
+    # --- CORRECTED: Use 'supplier_id' instead of 'id' ---
+    supplier_stats = Supplier.objects.annotate(
+        total_purchase=Sum(
+            'purchase__details__total_amount',
+            filter=Q(purchase__delete_status=False)
+        ),
+        total_paid=Sum(
+            'supplierpay__amount',
+            filter=Q(supplierpay__delete_status=False)
+        )
+    ).annotate(
+        balance=F('total_purchase') - F('total_paid')
+    ).values(
+        'supplier_id', 'supplier_name',  # Changed 'id' → 'supplier_id'
+        'total_purchase', 'total_paid', 'balance'
+    )
+
+    if supplier_id:
+        supplier_stats = supplier_stats.filter(supplier_id=supplier_id)  # Use supplier_id
+
+    context = {
+        'payments': payments,
+        'suppliers': Supplier.objects.all(),
+        'selected_supplier': supplier_id,
+        'from_date': request.GET.get('from_date'),  # Keep as string
+        'to_date': request.GET.get('to_date'),
+        'supplier_stats': list(supplier_stats),
+        'is_manager': is_manager,
+    }
+    return render(request, 'supplier_payment_list.html', context)
+
+
+@login_required
+def supplier_payment_update(request, pk):
+    if request.user.role not in ['manager', 'admin', 'super_admin']:
+        messages.error(request, "You are not authorized.")
+        return redirect('supplier_payment_list')
+
+    payment = get_object_or_404(Supplierpay, pk=pk, delete_status=False)
+    if request.method == 'POST':
+        form = SupplierpayForm(request.POST, instance=payment)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Payment updated successfully.")
+            return redirect('supplier_payment_list')
+    else:
+        form = SupplierpayForm(instance=payment)
+    return render(request, 'supplier_payment_form.html', {'form': form, 'payment': payment})
+
+
+@login_required
+def supplier_payment_delete(request, pk):
+    if request.user.role not in ['manager', 'admin', 'super_admin']:
+        messages.error(request, "You are not authorized.")
+        return redirect('supplier_payment_list')
+
+    payment = get_object_or_404(Supplierpay, pk=pk, delete_status=False)
+    payment.delete_status = True
+    payment.save()
+    messages.success(request, "Payment deleted (soft).")
+    return redirect('supplier_payment_list')
 
 @login_required
 def supplier_delete(request, pk):
@@ -287,7 +394,7 @@ def purchase_add(request):
             })
     else:
         initial = {
-            'purchase_date': datetime.date.today(),
+            'purchase_date': date.today(),
         }
         if not is_admin_like and request.user.branch:
             initial['branch'] = request.user.branch
@@ -299,6 +406,126 @@ def purchase_add(request):
             'is_admin_like': is_admin_like,
             'reset_form': True
         })
+
+@login_required(login_url='login')
+def purchase_list(request):
+    is_admin_like = request.user.role in ['super_admin', 'admin']
+    if is_admin_like:
+        purchases = Purchase.objects.filter(delete_status=False).select_related('supplier', 'branch')
+    else:
+        purchases = Purchase.objects.filter(branch=request.user.branch, delete_status=False).select_related('supplier')
+    
+    # Calculate totals for each purchase
+    purchase_data = []
+    for purchase in purchases:
+        details = purchase.details.all()
+        total_qty = sum(detail.qty for detail in details)
+        total_net_weight = sum(detail.net_weight for detail in details)
+        purchase_data.append({
+            'purchase': purchase,
+            'total_qty': total_qty,
+            'total_net_weight': total_net_weight,
+        })
+
+    context = {
+        'purchases': purchase_data,
+        'is_admin_like': is_admin_like,
+    }
+    return render(request, 'purchase_list.html', context)
+
+@login_required(login_url='login')
+def purchase_view(request, pk):
+    is_admin_like = request.user.role in ['super_admin', 'admin']
+    purchase = get_object_or_404(Purchase, pk=pk, delete_status=False)
+    
+    # Restrict non-admin users to their branch
+    if not is_admin_like and purchase.branch != request.user.branch:
+        messages.error(request, "You are not authorized to view this purchase.")
+        return redirect('purchase_list')
+
+    if request.method == "POST":
+        if not is_admin_like:
+            messages.error(request, "You are not authorized to update this purchase.")
+            return redirect('purchase_list')
+        
+        form = PurchaseForm(request.POST, instance=purchase, user=request.user)
+        formset = PurchaseDetailFormSet(request.POST, instance=purchase)
+        if form.is_valid() and formset.is_valid():
+            with transaction.atomic():
+                # Update purchase
+                purchase = form.save(commit=False)
+                purchase.updated_by = request.user
+                purchase.save()
+
+                # Revert stock for deleted or updated items
+                for detail in formset:
+                    if detail.instance.pk and detail.cleaned_data.get('DELETE'):
+                        item = detail.instance.item
+                        if item.category.is_weight_based:
+                            item.stock -= detail.instance.net_weight
+                        else:
+                            item.stock -= detail.instance.qty
+                        item.save()
+                    elif detail.cleaned_data and not detail.cleaned_data.get('DELETE'):
+                        detail_instance = detail.save(commit=False)
+                        detail_instance.purchase = purchase
+                        # Revert old stock
+                        if detail.instance.pk:
+                            old_item = detail.instance.item
+                            if old_item.category.is_weight_based:
+                                old_item.stock -= detail.instance.net_weight
+                            else:
+                                old_item.stock -= detail.instance.qty
+                            old_item.save()
+                        # Update new stock
+                        detail_instance.save()
+                        item = detail.cleaned_data['item']
+                        if item.category.is_weight_based:
+                            item.stock += detail.cleaned_data['net_weight']
+                        else:
+                            item.stock += detail.cleaned_data['qty']
+                        item.save()
+                formset.save()
+                messages.success(request, f"Purchase {purchase.invoice_number} updated successfully!")
+                return redirect('purchase_list')
+        else:
+            messages.error(request, "Please correct the errors below.")
+    else:
+        form = PurchaseForm(instance=purchase, user=request.user)
+        formset = PurchaseDetailFormSet(instance=purchase)
+
+    context = {
+        'form': form,
+        'formset': formset,
+        'purchase': purchase,
+        'is_admin_like': is_admin_like,
+        'reset_form': False
+    }
+    return render(request, 'purchase_view.html', context)
+
+@login_required(login_url='login')
+def purchase_delete(request, pk):
+    is_admin_like = request.user.role in ['super_admin', 'admin']
+    if not is_admin_like:
+        messages.error(request, "You are not authorized to delete this purchase.")
+        return redirect('purchase_list')
+
+    purchase = get_object_or_404(Purchase, pk=pk, delete_status=False)
+    with transaction.atomic():
+        # Revert stock
+        for detail in purchase.details.all():
+            item = detail.item
+            if item.category.is_weight_based:
+                item.stock -= detail.net_weight
+            else:
+                item.stock -= detail.qty
+            item.save()
+        # Update delete status and deleted_by
+        purchase.delete_status = True
+        purchase.deleted_by = request.user
+        purchase.save()
+        messages.success(request, f"Purchase {purchase.invoice_number} deleted successfully.")
+    return redirect('purchase_list')
 
 @login_required
 def retail_sales_add(request):
@@ -358,7 +585,7 @@ def retail_sales_add(request):
     else:
         initial = {
             'receipt_no': generate_next_receipt(),
-            'sales_date': datetime.date.today(),
+            'sales_date': date.today(),
             'payment_mode': 'cash',
         }
         if not is_admin_like and request.user.branch:
@@ -432,7 +659,7 @@ def wholesale_sales_add(request):
             })
     else:
         initial = {
-            'sales_date': datetime.date.today(),
+            'sales_date': date.today(),
             'payment_mode': 'pending',
             'paid_amount': 0,
         }

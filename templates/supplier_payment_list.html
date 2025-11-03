@@ -1,0 +1,120 @@
+{% load static %}
+{% include "sidebar/sidebar.html" %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h2 class="mb-4">Supplier Payments</h2>
+
+    <!-- Filter Form -->
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label>Supplier</label>
+                    <select name="supplier" class="form-control">
+                        <option value="">-- All Suppliers --</option>
+                        {% for s in suppliers %}
+                        <option value="{{ s.supplier_id }}" {% if s.supplier_id == selected_supplier|add:0 %}selected{% endif %}>
+                            {{ s.supplier_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label>From Date</label>
+                    <input type="date" name="from_date" class="form-control" value="{{ from_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-3">
+                    <label>To Date</label>
+                    <input type="date" name="to_date" class="form-control" value="{{ to_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">Filter</button>
+                    <a href="{% url 'supplier_payment_list' %}" class="btn btn-secondary">Clear</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Payments Table -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Payment Records</h6>
+            <a href="{% url 'supplier_pay' %}" class="btn btn-success btn-sm">+ Add Payment</a>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>S.No</th>
+                            <th>Supplier</th>
+                            <th>Date</th>
+                            <th>Amount</th>
+                            <th>Mode</th>
+                            <th>Description</th>
+                            {% if is_manager %}
+                            <th>Actions</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in payments %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td>{{ p.supplier.supplier_name }}</td>
+                            <td>{{ p.payment_date }}</td>
+                            <td>₹{{ p.amount }}</td>
+                            <td>{{ p.get_payment_mode_display }}</td>
+                            <td>{{ p.description|default:"-" }}</td>
+                            {% if is_manager %}
+                            <td>
+                                <a href="{% url 'supplier_payment_update' p.id %}" class="btn btn-warning btn-sm">Update</a>
+                                <a href="{% url 'supplier_payment_delete' p.id %}" class="btn btn-danger btn-sm"
+                                   onclick="return confirm('Soft delete this payment?');">Delete</a>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="{% if is_manager %}7{% else %}6{% endif %}">No payments found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Supplier-wise Summary -->
+    {% if supplier_stats %}
+    <div class="card shadow">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Supplier Summary</h6>
+        </div>
+        <div class="card-body">
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Supplier</th>
+                        <th>Total Purchase</th>
+                        <th>Total Paid</th>
+                        <th>Balance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stat in supplier_stats %}
+                    <tr>
+                        <td>{{ stat.supplier_name }}</td>
+                        <td>₹{{ stat.total_purchase|floatformat:2|default:"0.00" }}</td>
+                        <td>₹{{ stat.total_paid|floatformat:2|default:"0.00" }}</td>
+                        <td class="{% if stat.balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                            ₹{{ stat.balance|floatformat:2|default:"0.00" }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

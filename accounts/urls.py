@@ -14,6 +14,12 @@ urlpatterns = [
     path('suppliers/<int:pk>/delete/', views.supplier_delete, name='supplier_delete'),
     path('update/<int:pk>/', views.supplier_update, name='supplier_update'),
 
+    #supplier payment URLs
+    path('supplier_payment/add/', views.supplier_pay, name='supplier_pay'),
+    path('supplier-payments/', views.supplier_payment_list, name='supplier_payment_list'),
+    path('supplier-payments/<int:pk>/update/', views.supplier_payment_update, name='supplier_payment_update'),
+    path('supplier-payments/<int:pk>/delete/', views.supplier_payment_delete, name='supplier_payment_delete'),
+
     # Branch URLs
     path('branch_list/', views.branch_list, name='branch_list'),
     path('branch_add/', views.branch_add, name='branch_add'),
@@ -35,6 +41,9 @@ urlpatterns = [
 
     # Purchase URLs
     path('purchase/add/', views.purchase_add, name='purchase_add'),
+    path('purchases/', views.purchase_list, name='purchase_list'),
+    path('purchases/view/<int:pk>/', views.purchase_view, name='purchase_view'),
+    path('purchases/delete/<int:pk>/', views.purchase_delete, name='purchase_delete'),
 
     # Retail Sales URLs
     path('sales/add/', views.retail_sales_add, name='retail_sales_add'),

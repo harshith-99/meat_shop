@@ -36,6 +36,19 @@ class Supplier(models.Model):
 
     def __str__(self):
         return f"{self.supplier_name} - {self.company_name}"
+    
+class Supplierpay(models.Model):
+    supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE)
+    payment_date = models.DateField()
+    created_date = models.DateTimeField(auto_now_add=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2,default=0)
+    payment_mode = models.CharField(
+        max_length=20,
+        choices=(('cash', 'Cash'), ('online', 'Online')),
+        default='cash'
+    )
+    description = models.TextField(blank=True, null=True)
+    delete_status = models.BooleanField(default=False)
 
 class ItemCategory(models.Model):
     category_id = models.AutoField(primary_key=True)
@@ -157,3 +170,5 @@ class WholesaleSalesDetails(models.Model):
     tax_percentage = models.DecimalField(max_digits=5, decimal_places=2)
     price_per_unit = models.DecimalField(max_digits=10, decimal_places=2)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+

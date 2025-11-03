@@ -1,6 +1,7 @@
 from django import forms
-from .models import Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails
+from .models import Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay
 from django.forms import modelformset_factory
+from django.forms import inlineformset_factory
 from django.core.exceptions import ValidationError
 
 class SupplierForm(forms.ModelForm):
@@ -48,6 +49,39 @@ class SupplierForm(forms.ModelForm):
         if qs.exists():
             raise forms.ValidationError("This contact number is already registered.")
         return phone_no
+    
+class SupplierpayForm(forms.ModelForm):
+    
+    supplier = forms.ModelChoiceField(
+        queryset=Supplier.objects.all(),
+        widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+        required=True
+    )
+    payment_date = forms.DateField(
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control', 'autocomplete': 'off'}),
+        required=True
+    )
+    amount = forms.DecimalField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+        required=True
+    )
+    payment_mode = forms.ChoiceField(
+        choices=(('cash', 'Cash'), ('online', 'Online')),
+        widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'})
+    )
+    description = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'placeholder': 'Description (optional)',
+            'rows': 3
+        })
+    )
+
+    class Meta:
+        model = Supplierpay
+        fields = ['supplier', 'payment_date', 'amount', 'payment_mode', 'description']
+
 
 class BranchForm(forms.ModelForm):
     branch_name = forms.CharField(
@@ -249,8 +283,8 @@ class PurchaseDetailForm(forms.ModelForm):
         cleaned_data['is_weight_based'] = str(category.is_weight_based).lower() if category else 'false'
         return cleaned_data
 
-PurchaseDetailFormSet = modelformset_factory(
-    PurchaseDetail, form=PurchaseDetailForm, extra=1, can_delete=True
+PurchaseDetailFormSet = inlineformset_factory(
+    Purchase, PurchaseDetail, form=PurchaseDetailForm, extra=1, can_delete=True
 )
 
 class CustomerForm(forms.ModelForm):
