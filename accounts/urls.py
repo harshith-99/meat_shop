@@ -46,10 +46,16 @@ urlpatterns = [
     path('purchases/delete/<int:pk>/', views.purchase_delete, name='purchase_delete'),
 
     # Retail Sales URLs
-    path('sales/add/', views.retail_sales_add, name='retail_sales_add'),
+    path('retailsales/add/', views.retail_sales_add, name='retail_sales_add'),
+    path('sales/retail/list/', views.retail_sales_list, name='retail_sales_list'),
+    path('sales/retail/receipt/<int:pk>/', views.retail_receipt, name='retail_receipt'),
 
     # Wholesale Sales URLs
     path('wholesale-sales/add/', views.wholesale_sales_add, name='wholesale_sales_add'),
+    path('sales/wholesale/list/', views.wholesale_sales_list, name='wholesale_sales_list'),
+
+    # Employe URLs
+    path('employe/add/', views.employe_add, name='employe_add'),
 
     #api URL
     path('api/items-by-category/<int:category_id>/', views.items_by_category, name='items_by_category'),

@@ -1,5 +1,5 @@
 from django import forms
-from .models import Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay
+from .models import Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe
 from django.forms import modelformset_factory
 from django.forms import inlineformset_factory
 from django.core.exceptions import ValidationError
@@ -309,21 +309,30 @@ class CustomerForm(forms.ModelForm):
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'GSTIN', 'autocomplete': 'off'})
     )
 
+    def __init__(self, *args, customer_id=None, **kwargs):
+        self.customer_id = customer_id
+        super().__init__(*args, **kwargs)
+
     def clean_customer_phone(self):
-        phone = self.cleaned_data.get('customer_phone')
-        if phone and not phone.isdigit():
-            raise forms.ValidationError("Phone number must contain only digits.")
-        if phone and len(phone) != 10:
-            raise forms.ValidationError("Phone number must be exactly 10 digits.")
+        phone = self.cleaned_data.get('customer_phone', '').strip()
+        if phone:
+            if not phone.isdigit():
+                raise forms.ValidationError("Phone number must contain only digits.")
+            if len(phone) != 10:
+                raise forms.ValidationError("Phone number must be exactly 10 digits.")
         return phone
 
     def clean(self):
         cleaned_data = super().clean()
-        customer_name = cleaned_data.get('customer_name')
-        customer_phone = cleaned_data.get('customer_phone')
-        if customer_name or customer_phone:
-            if Customer.objects.filter(customer_phone=customer_phone).exclude(id=self.instance.id).exists():
-                raise forms.ValidationError("A customer with this phone number already exists.")
+        phone = cleaned_data.get('customer_phone', '').strip()
+        gstin = cleaned_data.get('gstin', '').strip()
+
+        # ONLY validate uniqueness if creating new (no customer_id)
+        if not self.customer_id:
+            if phone and Customer.objects.filter(customer_phone=phone).exists():
+                self.add_error('customer_phone', "A customer with this phone number already exists.")
+            if gstin and Customer.objects.filter(gstin=gstin).exists():
+                self.add_error('gstin', "A customer with this GSTIN already exists.")
         return cleaned_data
 
 class RetailSalesForm(forms.ModelForm):
@@ -496,3 +505,71 @@ class WholesaleSalesDetailForm(forms.ModelForm):
 WholesaleSalesDetailFormSet = modelformset_factory(
     WholesaleSalesDetails, form=WholesaleSalesDetailForm, extra=1, can_delete=True
 )
+
+class EmployeForm(forms.ModelForm):
+    class Meta:
+        model = Employe
+        fields = ['emp_id', 'name', 'phone_no', 'address', 'role', 'branch']
+
+    emp_id = forms.CharField(
+        required=True,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Employee ID',
+            'autocomplete': 'off'
+        })
+    )
+    name = forms.CharField(
+        required=True,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Employee Name',
+            'autocomplete': 'off'
+        })
+    )
+    phone_no = forms.CharField(
+        required=True,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Phone Number',
+            'autocomplete': 'off'
+        })
+    )
+    address = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'placeholder': 'Address (optional)',
+            'rows': 3,
+            'autocomplete': 'off'
+        })
+    )
+    role = forms.ChoiceField(
+        choices=Employe.ROLE_CHOICES,
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        required=True
+    )
+    branch = forms.ModelChoiceField(
+        queryset=Branch.objects.all(),
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        required=False,  # Optional if staff can be without branch
+        empty_label="--- Select Branch ---"
+    )
+
+    def clean_phone_no(self):
+        phone = self.cleaned_data.get('phone_no')
+        if phone:
+            if not phone.isdigit():
+                raise forms.ValidationError("Phone number must contain only digits.")
+            if len(phone) != 10:
+                raise forms.ValidationError("Phone number must be exactly 10 digits.")
+            # Check uniqueness
+            if Employe.objects.filter(phone_no=phone).exclude(pk=self.instance.pk).exists():
+                raise forms.ValidationError("An employee with this phone number already exists.")
+        return phone
+
+    def clean_emp_id(self):
+        emp_id = self.cleaned_data.get('emp_id')
+        if Employe.objects.filter(emp_id=emp_id).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError("This Employee ID is already taken.")
+        return emp_id

@@ -106,10 +106,28 @@
                 <div id="collapsePages3" class="collapse" aria-labelledby="headingPages" data-parent="#accordionSidebar">
                     <div class="bg-white py-2 collapse-inner rounded">
                         <a class="collapse-item" href="{% url 'retail_sales_add' %}">Retail Sales</a>
+                        <a class="collapse-item" href="{% url 'retail_sales_list' %}">Retail Sales List</a>
                         <a class="collapse-item" href="{% url 'wholesale_sales_add' %}">Wholesale Sales</a>
                     </div>
                 </div>
             </li>
+
+             {% if request.user.role == 'admin' or request.user.role == 'super_admin' or request.user.role == 'manager' %}
+                <li class="nav-item">
+                    <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapsePages4"
+                        aria-expanded="true" aria-controls="collapsePages4">
+                        <i class="fas fa-fw fa-folder"></i>
+                        <span>Employe</span>
+                    </a>
+                    
+                    <div id="collapsePages4" class="collapse" aria-labelledby="headingPages" data-parent="#accordionSidebar">
+                        <div class="bg-white py-2 collapse-inner rounded">
+                            <a class="collapse-item" href="{% url 'employe_add' %}">Add Employe</a>
+                            <a class="collapse-item" href="{% url 'item_list' %}">Attedendence</a>
+                        </div>
+                    </div>
+                </li>
+            {% endif %}
 
          {% if request.user.role == 'super_admin' %}
 

@@ -1,0 +1,59 @@
+{% load static %}
+{% include "sidebar\sidebar.html" %}
+{% load humanize %}
+
+
+    <div class="container-fluid">
+        <h2>Retail Sales</h2>
+
+        {% if is_admin_like %}
+        <form method="get" class="mb-3">
+            <div class="row g-2">
+                <div class="col">
+                    <select name="branch" class="form-select form-select-sm">
+                        <option value="">All Branches</option>
+                        {% for b in branches %}
+                        <option value="{{ b.id }}" {% if selected_branch == b.id|stringformat:"s" %}selected{% endif %}>
+                            {{ b.branch_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col"><input type="date" name="from_date" value="{{ from_date }}" class="form-control form-control-sm"></div>
+                <div class="col"><input type="date" name="to_date" value="{{ to_date }}" class="form-control form-control-sm"></div>
+                <div class="col"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
+            </div>
+        </form>
+        {% endif %}
+
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-sm table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Receipt</th>
+                            <th>Date</th>
+                            <th>Branch</th>
+                            <th>Customer</th>
+                            <th>Total</th>
+                            <th>Print</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in sales %}
+                        <tr>
+                            <td>{{ s.receipt_no }}</td>
+                            <td>{{ s.sales_date|date:"d/m/Y" }}</td>
+                            <td>{{ s.branch.branch_name }}</td>
+                            <td>{{ s.customer.customer_name|default:"Walk-in" }}</td>
+                            <td>₹{{ s.grand_total|floatformat:2|intcomma }}</td>
+                            <td><a href="{% url 'retail_receipt' s.pk %}" target="_blank" class="btn btn-info btn-xs">Print</a></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="text-center">No sales</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>

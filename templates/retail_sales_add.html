@@ -8,6 +8,25 @@
     <div class="alert alert-{{ message.tags }}">{{ message }}</div>
     {% endfor %}
 
+    {% if form.errors or formset.errors or customer_form.errors %}
+    <div class="alert alert-danger">
+        <strong>Please fix the following errors:</strong>
+        <ul>
+            {% for field, errors in form.errors.items %}
+                <li><strong>{{ field }}</strong>: {{ errors|join:", " }}</li>
+            {% endfor %}
+            {% for form in formset %}
+                {% for field, errors in form.errors.items %}
+                    <li><strong>Item {{ forloop.parentloop.counter }} - {{ field }}</strong>: {{ errors|join:", " }}</li>
+                {% endfor %}
+            {% endfor %}
+            {% for field, errors in customer_form.errors.items %}
+                <li><strong>Customer - {{ field }}</strong>: {{ errors|join:", " }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
     <form method="post">
         {% csrf_token %}
 

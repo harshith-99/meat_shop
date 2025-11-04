@@ -105,10 +105,18 @@ class PurchaseDetail(models.Model):
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
 
 class Customer(models.Model):
-    customer_name = models.CharField(max_length=100)
-    customer_phone = models.CharField(max_length=15)
-    customer_address = models.TextField()
-    gstin = models.CharField(max_length=20, unique=True)
+    customer_name = models.CharField(max_length=100, blank=True)
+    customer_phone = models.CharField(max_length=15, blank=True, unique=True, null=True)
+    customer_address = models.TextField(blank=True)
+    gstin = models.CharField(
+        max_length=15,
+        blank=True,
+        null=True,
+        unique=True  # Only unique when not blank
+    )
+
+    def __str__(self):
+        return self.customer_name or self.customer_phone or "Customer"
 
 class RetailSales(models.Model):
     receipt_no = models.CharField(max_length=20, unique=True)
@@ -157,9 +165,9 @@ class WholesaleSales(models.Model):
     )
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2)
 
-    def clean(self):
-        if self.paid_amount > self.grand_total:
-            raise ValidationError("Paid amount cannot be greater than the grand total.")
+    # def clean(self):
+    #     if self.paid_amount > self.grand_total:
+    #         raise ValidationError("Paid amount cannot be greater than the grand total.")
 
 class WholesaleSalesDetails(models.Model):
     sales = models.ForeignKey(WholesaleSales, on_delete=models.CASCADE, related_name='details')
@@ -171,4 +179,18 @@ class WholesaleSalesDetails(models.Model):
     price_per_unit = models.DecimalField(max_digits=10, decimal_places=2)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
 
+
+class Employe(models.Model):
+    emp_id = models.CharField(max_length=20, unique=True)
+    name = models.CharField(max_length=100)
+    phone_no = models.CharField(max_length=15)
+    address = models.TextField()
+    ROLE_CHOICES = (
+        ('staff', 'Staff'),
+        ('manager', 'Manager'),
+    )
+    role = models.CharField(max_length=20,choices=ROLE_CHOICES, default='staff')
+    branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True, blank=True)
+    created_date = models.DateTimeField(auto_now_add=True)
+    delete_status = models.BooleanField(default=False)
 
