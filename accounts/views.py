@@ -574,36 +574,52 @@ def retail_receipt(request, pk):
 @login_required
 def retail_sales_list(request):
     is_admin_like = request.user.role in ['super_admin', 'admin', 'manager']
+    
+    # === GET FILTERS ===
     branch_id = request.GET.get('branch')
-    from_date = request.GET.get('from_date')
-    to_date = request.GET.get('to_date')
+    from_date_str = request.GET.get('from_date')
+    to_date_str = request.GET.get('to_date')
 
-    sales = RetailSales.objects.filter(delete_status=False)
+    # === DEFAULT: TODAY ===
+    today = date.today()
+    from_date = from_date_str or today.strftime('%Y-%m-%d')
+    to_date = to_date_str or today.strftime('%Y-%m-%d')
 
+    # === BUILD QUERY ===
+    sales = RetailSales.objects.filter(
+        delete_status=False,
+        sales_date__gte=from_date,
+        sales_date__lte=to_date
+    ).select_related('branch', 'customer', 'added_by')
+
+    # Branch Filter
     if not is_admin_like:
         sales = sales.filter(branch=request.user.branch)
     else:
         if branch_id:
             sales = sales.filter(branch_id=branch_id)
 
-    if from_date:
+    sales = sales.order_by('-sales_date')
+
+    # === GET BRANCH NAME FOR DISPLAY ===
+    selected_branch_name = ""
+    if branch_id:
         try:
-            sales = sales.filter(sales_date__gte=from_date)
-        except:
+            selected_branch_name = Branch.objects.get(id=branch_id).branch_name
+        except Branch.DoesNotExist:
             pass
-    if to_date:
-        try:
-            sales = sales.filter(sales_date__lte=to_date)
-        except:
-            pass
+    elif not is_admin_like and request.user.branch:
+        selected_branch_name = request.user.branch.branch_name
 
     context = {
-        'sales': sales.select_related('branch', 'customer').order_by('-sales_date'),
+        'sales': sales,
         'branches': Branch.objects.all() if is_admin_like else None,
         'is_admin_like': is_admin_like,
         'selected_branch': branch_id,
         'from_date': from_date,
         'to_date': to_date,
+        'selected_branch_name': selected_branch_name,
+        'today': today,
     }
     return render(request, 'retail_sales_list.html', context)
 
@@ -698,6 +714,29 @@ def retail_sales_add(request):
         'form': form, 'formset': formset,
         'customer_form': customer_form, 'is_admin_like': is_admin_like
     })
+
+@login_required
+def retail_sales_delete(request, pk):
+    if request.user.role not in ['super_admin', 'admin', 'manager']:
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+    sale = get_object_or_404(RetailSales, pk=pk, delete_status=False)
+    
+    # Restore stock
+    with transaction.atomic():
+        for detail in sale.retailsalesdetails_set.all():
+            item = detail.item
+            if item.category.is_weight_based:
+                item.stock += detail.net_weight
+            else:
+                item.stock += detail.qty
+            item.save()
+
+        sale.delete_status = True
+        sale.deleted_by = request.user
+        sale.save()
+
+    return JsonResponse({'success': True})
 
 @login_required
 def wholesale_sales_list(request):
