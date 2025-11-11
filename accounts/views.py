@@ -7,16 +7,45 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.db import transaction
 from decimal import Decimal, InvalidOperation
+<<<<<<< HEAD
 from .forms import PurchaseForm, PurchaseDetailFormSet, ItemCategoryForm, BranchForm, SupplierForm, ItemForm, RetailSalesForm, RetailSalesDetailFormSet, CustomerForm, WholesaleSalesForm, WholesaleSalesDetailFormSet,SupplierpayForm,EmployeForm
 from .models import Purchase, PurchaseDetail, Branch, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe
+=======
+from .forms import EmployeeLoginForm,PurchaseForm, PurchaseDetailFormSet, ItemCategoryForm, BranchForm, SupplierForm, ItemForm, RetailSalesForm, RetailSalesDetailFormSet, CustomerForm, WholesaleSalesForm, WholesaleSalesDetailFormSet,SupplierpayForm,EmployeForm,AttendanceInlineForm
+from .models import Purchase, PurchaseDetail, Branch, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance
+>>>>>>> 12bb8f8 (commit on 11112025)
 import logging
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from django.http import HttpRequest
 from datetime import datetime, date
+<<<<<<< HEAD
 
 logger = logging.getLogger(__name__)
 
+=======
+from django.contrib.auth.hashers import make_password
+
+logger = logging.getLogger(__name__)
+
+@login_required
+def employee_login_create(request):
+    if request.user.role not in ['super_admin', 'admin', 'manager']:
+        messages.error(request, "You are not authorized.")
+        return redirect('dashboard')
+
+    if request.method == 'POST':
+        form = EmployeeLoginForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            messages.success(request, f"Login created for {user.get_full_name() or user.username}")
+            return redirect('employee_login_create')
+    else:
+        form = EmployeeLoginForm()
+
+    return render(request, 'employee_login_create.html', {'form': form})
+
+>>>>>>> 12bb8f8 (commit on 11112025)
 def login_view(request):
     if request.user.is_authenticated:
         return redirect('dashboard')
@@ -572,6 +601,7 @@ def retail_receipt(request, pk):
     return render(request, 'retail_receipt.html', {'sale': sale})
 
 @login_required
+<<<<<<< HEAD
 def retail_sales_list(request):
     is_admin_like = request.user.role in ['super_admin', 'admin', 'manager']
     
@@ -624,6 +654,8 @@ def retail_sales_list(request):
     return render(request, 'retail_sales_list.html', context)
 
 @login_required
+=======
+>>>>>>> 12bb8f8 (commit on 11112025)
 def retail_sales_add(request):
     is_admin_like = request.user.role in ['super_admin', 'admin', 'manager']
     if request.method == "POST":
@@ -715,6 +747,7 @@ def retail_sales_add(request):
         'customer_form': customer_form, 'is_admin_like': is_admin_like
     })
 
+<<<<<<< HEAD
 @login_required
 def retail_sales_delete(request, pk):
     if request.user.role not in ['super_admin', 'admin', 'manager']:
@@ -746,6 +779,111 @@ def wholesale_sales_list(request):
     to_date = request.GET.get('to_date')
 
     sales = WholesaleSales.objects.filter(delete_status=False)
+=======
+from django.db.models import Q
+from datetime import date
+
+@login_required
+def retail_sales_list(request):
+    is_admin_like = request.user.role in ['super_admin', 'admin', 'manager']
+    
+    branch_id = request.GET.get('branch')  # string or None
+    from_date_str = request.GET.get('from_date')
+    to_date_str = request.GET.get('to_date')
+
+    today = date.today()
+    from_date = from_date_str or today.strftime('%Y-%m-%d')
+    to_date = to_date_str or today.strftime('%Y-%m-%d')
+
+    # Convert branch_id to int safely
+    selected_branch_id = None
+    if branch_id and branch_id.isdigit():
+        selected_branch_id = int(branch_id)
+    elif branch_id == '':  # Explicit "All Branches"
+        selected_branch_id = None
+
+    # Base query
+    sales = RetailSales.objects.filter(
+        delete_status=False,
+        sales_date__gte=from_date,
+        sales_date__lte=to_date
+    ).select_related('branch', 'customer', 'added_by')
+
+    # Apply filters
+    if not is_admin_like:
+        sales = sales.filter(branch=request.user.branch)
+    elif selected_branch_id is not None:
+        sales = sales.filter(branch_id=selected_branch_id)
+
+    sales = sales.order_by('-sales_date')
+
+    # === BRANCH NAME FOR SUMMARY ===
+    selected_branch_name = "All Branches"
+    if selected_branch_id is not None:
+        try:
+            selected_branch_name = Branch.objects.get(id=selected_branch_id).branch_name
+        except Branch.DoesNotExist:
+            selected_branch_name = "Unknown Branch"
+    elif not is_admin_like and request.user.branch:
+        selected_branch_name = request.user.branch.branch_name
+
+    context = {
+        'sales': sales,
+        'branches': Branch.objects.all() if is_admin_like else [],
+        'is_admin_like': is_admin_like,
+        'selected_branch': selected_branch_id,  # int or None
+        'from_date': from_date,
+        'to_date': to_date,
+        'selected_branch_name': selected_branch_name,
+        'today': today.strftime('%Y-%m-%d'),
+    }
+    return render(request, 'retail_sales_list.html', context)
+
+@login_required
+def retail_sales_delete(request, pk):
+    if request.user.role not in ['super_admin', 'admin', 'manager']:
+        return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
+
+    sale = get_object_or_404(RetailSales, pk=pk, delete_status=False)
+
+    try:
+        with transaction.atomic():
+            # CORRECT: related_name='details'
+            for detail in sale.details.all():
+                item = detail.item
+                if item.category.is_weight_based:
+                    item.stock += detail.net_weight
+                else:
+                    item.stock += detail.qty
+                item.save()
+
+            sale.delete_status = True
+            sale.deleted_by = request.user
+            sale.save()
+
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+# views.py → wholesale_sales_list
+@login_required
+def wholesale_sales_list(request):
+    is_admin_like = request.user.role in ['super_admin', 'admin', 'manager']
+    
+    branch_id = request.GET.get('branch')
+    from_date_str = request.GET.get('from_date')
+    to_date_str = request.GET.get('to_date')
+
+    today = date.today()
+    from_date = from_date_str or today.strftime('%Y-%m-%d')
+    to_date = to_date_str or today.strftime('%Y-%m-%d')
+
+    sales = WholesaleSales.objects.filter(
+        delete_status=False,
+        sales_date__gte=from_date,
+        sales_date__lte=to_date
+    ).select_related('branch', 'customer', 'added_by')
+>>>>>>> 12bb8f8 (commit on 11112025)
 
     if not is_admin_like:
         sales = sales.filter(branch=request.user.branch)
@@ -753,6 +891,7 @@ def wholesale_sales_list(request):
         if branch_id:
             sales = sales.filter(branch_id=branch_id)
 
+<<<<<<< HEAD
     if from_date:
         try:
             sales = sales.filter(sales_date__gte=from_date)
@@ -766,11 +905,31 @@ def wholesale_sales_list(request):
 
     context = {
         'sales': sales.select_related('branch', 'customer').order_by('-sales_date'),
+=======
+    sales = sales.order_by('-sales_date')
+
+    selected_branch_name = ""
+    if branch_id:
+        try:
+            selected_branch_name = Branch.objects.get(id=branch_id).branch_name
+        except:
+            pass
+    elif not is_admin_like and request.user.branch:
+        selected_branch_name = request.user.branch.branch_name
+
+    context = {
+        'sales': sales,
+>>>>>>> 12bb8f8 (commit on 11112025)
         'branches': Branch.objects.all() if is_admin_like else None,
         'is_admin_like': is_admin_like,
         'selected_branch': branch_id,
         'from_date': from_date,
         'to_date': to_date,
+<<<<<<< HEAD
+=======
+        'selected_branch_name': selected_branch_name,
+        'today': today,
+>>>>>>> 12bb8f8 (commit on 11112025)
     }
     return render(request, 'wholesale_sales_list.html', context)
 
@@ -872,6 +1031,36 @@ def wholesale_sales_add(request):
         'is_admin_like': is_admin_like
     })
 
+<<<<<<< HEAD
+=======
+@login_required
+def wholesale_receipt(request, pk):
+    sale = get_object_or_404(WholesaleSales, pk=pk, delete_status=False)
+    return render(request, 'wholesale_receipt.html', {'sale': sale})
+
+@login_required
+def wholesale_sales_delete(request, pk):
+    if request.user.role not in ['super_admin', 'admin', 'manager']:
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+    sale = get_object_or_404(WholesaleSales, pk=pk, delete_status=False)
+    
+    with transaction.atomic():
+        for detail in sale.wholesalesalesdetails_set.all():
+            item = detail.item
+            if item.category.is_weight_based:
+                item.stock += detail.net_weight
+            else:
+                item.stock += detail.qty
+            item.save()
+
+        sale.delete_status = True
+        sale.deleted_by = request.user
+        sale.save()
+
+    return JsonResponse({'success': True})
+
+>>>>>>> 12bb8f8 (commit on 11112025)
 def generate_next_receipt():
     last = RetailSales.objects.order_by('-id').first()
     if last:
@@ -954,4 +1143,128 @@ def employe_add(request):
     else:
         form = EmployeForm()
 
+<<<<<<< HEAD
     return render(request, "employe_add.html", {"form": form})
+=======
+    return render(request, "employe_add.html", {"form": form})
+
+from django.forms import inlineformset_factory
+
+@login_required
+def attendance_view(request):
+    if request.user.role not in ['admin', 'manager', 'super_admin']:
+        messages.error(request, "You are not authorized.")
+        return redirect('dashboard')
+
+    today = date.today()
+    date_str = request.GET.get('date', today.isoformat())
+    branch_id = request.GET.get('branch')
+
+    try:
+        selected_date = date.fromisoformat(date_str)
+    except ValueError:
+        selected_date = today
+
+    # BRANCH
+    if not branch_id:
+        return render(request, 'attendance.html', {
+            'selected_date': selected_date,
+            'branches': Branch.objects.all(),
+            'today': today,
+            'no_branch_selected': True,
+        })
+
+    branch = get_object_or_404(Branch, branch_id=int(branch_id))
+
+    # EMPLOYEES
+    employees = Employe.objects.filter(
+        delete_status=False,
+        role__in=['staff', 'manager'],
+        branch=branch
+    ).order_by('name')
+
+    if not employees.exists():
+        return render(request, 'attendance.html', {
+            'selected_date': selected_date,
+            'branches': Branch.objects.all(),
+            'selected_branch_id': branch_id,
+            'selected_branch': branch,
+            'today': today,
+            'no_employees': True,
+        })
+
+    # GET: Build forms
+    if request.method == 'GET':
+        forms = []
+        existing = Attendance.objects.filter(
+            employee__in=employees,
+            date=selected_date
+        ).select_related('recorded_by')
+
+        saved_map = {a.employee_id: a.status for a in existing}
+        already_saved = len(saved_map) == employees.count()
+
+        for emp in employees:
+            instance = next((a for a in existing if a.employee_id == emp.id), None)
+            form = AttendanceInlineForm(
+                instance=instance,
+                initial={'status': 'present'} if not instance else None,
+                prefix=f'emp-{emp.id}'
+            )
+            if already_saved:
+                form.fields['status'].disabled = True
+            forms.append((emp, form))
+
+        context = {
+            'forms': forms,
+            'selected_date': selected_date,
+            'branches': Branch.objects.all(),
+            'selected_branch_id': branch_id,
+            'selected_branch': branch,
+            'today': today,
+            'already_saved': already_saved,
+            'saved_on': existing.first().recorded_at if already_saved and existing else None,
+            'recorded_by': existing.first().recorded_by if already_saved and existing else None,
+        }
+        return render(request, 'attendance.html', context)
+
+    # POST: Save
+    if request.method == 'POST':
+        forms = []
+        all_valid = True
+
+        for emp in employees:
+            prefix = f'emp-{emp.id}'
+            form = AttendanceInlineForm(request.POST, instance=None, prefix=prefix)
+            forms.append((emp, form))
+            if not form.is_valid():
+                all_valid = False
+
+        if not all_valid:
+            messages.error(request, "Please select attendance for all employees.")
+            context = {
+                'forms': forms,
+                'selected_date': selected_date,
+                'branches': Branch.objects.all(),
+                'selected_branch_id': branch_id,
+                'selected_branch': branch,
+                'today': today,
+            }
+            return render(request, 'attendance.html', context)
+
+        with transaction.atomic():
+            for emp, form in forms:
+                status = form.cleaned_data['status']
+                Attendance.objects.update_or_create(
+                    employee=emp,
+                    date=selected_date,
+                    defaults={
+                        'status': status,
+                        'branch': branch,
+                        'recorded_by': request.user
+                    }
+                )
+
+        messages.success(request, f"Attendance saved for {selected_date}")
+        return redirect(request.path + f'?date={selected_date}&branch={branch_id}')
+>>>>>>> 12bb8f8 (commit on 11112025)

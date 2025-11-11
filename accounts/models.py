@@ -1,6 +1,10 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
+<<<<<<< HEAD
+=======
+from django.utils import timezone
+>>>>>>> 12bb8f8 (commit on 11112025)
 # Create your models here.
 
 class Branch(models.Model):
@@ -188,9 +192,54 @@ class Employe(models.Model):
     ROLE_CHOICES = (
         ('staff', 'Staff'),
         ('manager', 'Manager'),
+<<<<<<< HEAD
     )
     role = models.CharField(max_length=20,choices=ROLE_CHOICES, default='staff')
+=======
+        ('admin', 'Admin'),
+    )
+    role = models.CharField(max_length=20,choices=ROLE_CHOICES, default='staff')
+    salary_per_day = models.DecimalField(max_digits=10, decimal_places=2)
+>>>>>>> 12bb8f8 (commit on 11112025)
     branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True, blank=True)
     created_date = models.DateTimeField(auto_now_add=True)
     delete_status = models.BooleanField(default=False)
 
+<<<<<<< HEAD
+=======
+
+
+ATTENDANCE_CHOICES = (
+    ('present', 'Present'),
+    ('absent',  'Absent'),
+    ('halfday', 'Half Day'),
+)
+
+
+class Attendance(models.Model):
+    ATTENDANCE_CHOICES = (
+        ('present', 'Present'),
+        ('absent',  'Absent'),
+        ('halfday', 'Half Day'),
+    )
+
+    employee   = models.ForeignKey(Employe, on_delete=models.CASCADE)
+    date       = models.DateField()
+    status     = models.CharField(max_length=10, choices=ATTENDANCE_CHOICES, default='present')
+    branch     = models.ForeignKey(Branch, on_delete=models.CASCADE)   # cached for fast filtering
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='attendance_recorded'
+    )
+    recorded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('employee', 'date')      # one record per employee per day
+        ordering = ['-date', 'branch__branch_name', 'employee__name']
+
+    def __str__(self):
+        return f"{self.employee.name} – {self.get_status_display()} ({self.date})"
+
+>>>>>>> 12bb8f8 (commit on 11112025)

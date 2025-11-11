@@ -54,9 +54,18 @@ urlpatterns = [
     # Wholesale Sales URLs
     path('wholesale-sales/add/', views.wholesale_sales_add, name='wholesale_sales_add'),
     path('sales/wholesale/list/', views.wholesale_sales_list, name='wholesale_sales_list'),
+<<<<<<< HEAD
 
     # Employe URLs
     path('employe/add/', views.employe_add, name='employe_add'),
+=======
+    path('sales/wholesale/receipt/<int:pk>/', views.wholesale_receipt, name='wholesale_receipt'),
+    path('sales/wholesale/delete/<int:pk>/', views.wholesale_sales_delete, name='wholesale_sales_delete'),
+
+    # Employe URLs
+    path('employe/add/', views.employe_add, name='employe_add'),
+    path('attendance/', views.attendance_view, name='attendance'),
+>>>>>>> 12bb8f8 (commit on 11112025)
 
     #api URL
     path('api/items-by-category/<int:category_id>/', views.items_by_category, name='items_by_category'),
@@ -65,4 +74,13 @@ urlpatterns = [
     path('api/item_by_code/', views.item_by_code, name='item_by_code'),
     path('api/search_customers/', views.search_customers, name='search_customers'),
     path('api/item-details/<int:item_id>/', views.item_details, name='item_details'),
+<<<<<<< HEAD
 ]
+=======
+
+    #create login
+    # urls.py
+    path('employee-login/create/', views.employee_login_create, name='employee_login_create'),
+]
+
+>>>>>>> 12bb8f8 (commit on 11112025)

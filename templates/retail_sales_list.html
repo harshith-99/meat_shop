@@ -5,10 +5,14 @@
 <div class="container-fluid">
     <h1 class="h3 mb-4 text-gray-800">Retail Sales Report</h1>
 
+<<<<<<< HEAD
     <!-- FILTER SUMMARY -->
     
 
     <!-- FILTER FORM -->
+=======
+    <!-- FILTER FORM (NO CSRF!) -->
+>>>>>>> 12bb8f8 (commit on 11112025)
     <div class="card shadow mb-3">
         <div class="card-body">
             <form method="get">
@@ -19,7 +23,11 @@
                         <select name="branch" class="form-select form-select-sm">
                             <option value="">All Branches</option>
                             {% for b in branches %}
+<<<<<<< HEAD
                             <option value="{{ b.id }}" {% if selected_branch == b.id|stringformat:"s" %}selected{% endif %}>
+=======
+                            <option value="{{ b.id }}" {% if selected_branch == b.id %}selected{% endif %}>
+>>>>>>> 12bb8f8 (commit on 11112025)
                                 {{ b.branch_name }}
                             </option>
                             {% endfor %}
@@ -43,11 +51,19 @@
         </div>
     </div>
 
+<<<<<<< HEAD
+=======
+    <!-- FILTER SUMMARY -->
+>>>>>>> 12bb8f8 (commit on 11112025)
     <div class="card shadow mb-3">
         <div class="card-body p-3">
             <div class="row text-sm">
                 <div class="col">
+<<<<<<< HEAD
                     <strong>Branch:</strong> {{ selected_branch_name|default:"All Branches" }}
+=======
+                    <strong>Branch:</strong> {{ selected_branch_name }}
+>>>>>>> 12bb8f8 (commit on 11112025)
                 </div>
                 <div class="col">
                     <strong>From:</strong> {{ from_date|date:"d/m/Y" }}
@@ -91,7 +107,13 @@
                                 <a href="{% url 'retail_receipt' s.pk %}" target="_blank" class="btn btn-info btn-sm">
                                     Print
                                 </a>
+<<<<<<< HEAD
                                 <button onclick="deleteSale({{ s.pk }})" class="btn btn-danger btn-sm">
+=======
+                                <button type="button"
+                                        onclick="deleteSale('{{ s.pk }}')"
+                                        class="btn btn-danger btn-sm">
+>>>>>>> 12bb8f8 (commit on 11112025)
                                     Delete
                                 </button>
                             </td>
@@ -100,7 +122,11 @@
                         {% empty %}
                         <tr>
                             <td colspan="{% if is_admin_like %}7{% else %}5{% endif %}" class="text-center">
+<<<<<<< HEAD
                                 No sales found for selected filters
+=======
+                                No sales found
+>>>>>>> 12bb8f8 (commit on 11112025)
                             </td>
                         </tr>
                         {% endfor %}
@@ -111,6 +137,7 @@
     </div>
 </div>
 
+<<<<<<< HEAD
 <!-- DELETE SCRIPT -->
 <script>
 function deleteSale(pk) {
@@ -125,5 +152,35 @@ function deleteSale(pk) {
             else alert('Error: ' + data.error);
         });
     }
+=======
+<!-- CSRF TOKEN (HIDDEN) -->
+<input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+
+<!-- DELETE SCRIPT (SIMPLE + CSRF) -->
+<script>
+function deleteSale(pk) {
+    if (!confirm('Delete this sale? Stock will be restored.')) return;
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    fetch(`/accounts/sales/retail/delete/${pk}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Sale deleted!');
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Failed'));
+        }
+    })
+    .catch(() => alert('Network error. Try again.'));
+>>>>>>> 12bb8f8 (commit on 11112025)
 }
 </script>

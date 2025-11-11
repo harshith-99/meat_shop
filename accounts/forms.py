@@ -1,9 +1,58 @@
 from django import forms
+<<<<<<< HEAD
 from .models import Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe
+=======
+from .models import CustomUser,Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance
+>>>>>>> 12bb8f8 (commit on 11112025)
 from django.forms import modelformset_factory
 from django.forms import inlineformset_factory
 from django.core.exceptions import ValidationError
 
+<<<<<<< HEAD
+=======
+
+class EmployeeLoginForm(forms.ModelForm):
+    employee = forms.ModelChoiceField(
+        queryset=Employe.objects.filter(delete_status=False),
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label="Employee Name"
+    )
+    username = forms.CharField(
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Username'}),
+        max_length=150
+    )
+    password = forms.CharField(
+        widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'Password'}),
+        max_length=128
+    )
+
+    class Meta:
+        model = CustomUser
+        fields = ['employee', 'username', 'password']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['employee'].label_from_instance = lambda obj: f"{obj.name} - {obj.role} ({obj.branch.branch_name if obj.branch else 'No Branch'})"
+
+    def clean_username(self):
+        username = self.cleaned_data['username']
+        if CustomUser.objects.filter(username=username).exists():
+            raise forms.ValidationError("This username is already taken.")
+        return username
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.set_password(self.cleaned_data['password'])
+
+        emp = self.cleaned_data['employee']
+        user.role = emp.role
+        user.branch = emp.branch  # THIS LINE WAS MISSING
+
+        if commit:
+            user.save()
+        return user
+
+>>>>>>> 12bb8f8 (commit on 11112025)
 class SupplierForm(forms.ModelForm):
     supplier_name = forms.CharField(
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Supplier Name', 'required': 'true', 'autocomplete': 'off'})
@@ -509,7 +558,11 @@ WholesaleSalesDetailFormSet = modelformset_factory(
 class EmployeForm(forms.ModelForm):
     class Meta:
         model = Employe
+<<<<<<< HEAD
         fields = ['emp_id', 'name', 'phone_no', 'address', 'role', 'branch']
+=======
+        fields = ['emp_id', 'name', 'phone_no', 'address', 'role', 'branch', 'salary_per_day']
+>>>>>>> 12bb8f8 (commit on 11112025)
 
     emp_id = forms.CharField(
         required=True,
@@ -555,6 +608,13 @@ class EmployeForm(forms.ModelForm):
         required=False,  # Optional if staff can be without branch
         empty_label="--- Select Branch ---"
     )
+<<<<<<< HEAD
+=======
+    salary_per_day = forms.DecimalField(
+        widget=forms.NumberInput(attrs={'class': 'form-control','autocomplete': 'off'}),
+        required=True
+    )
+>>>>>>> 12bb8f8 (commit on 11112025)
 
     def clean_phone_no(self):
         phone = self.cleaned_data.get('phone_no')
@@ -573,3 +633,26 @@ class EmployeForm(forms.ModelForm):
         if Employe.objects.filter(emp_id=emp_id).exclude(pk=self.instance.pk).exists():
             raise forms.ValidationError("This Employee ID is already taken.")
         return emp_id
+<<<<<<< HEAD
+=======
+    
+
+class AttendanceInlineForm(forms.ModelForm):
+    status = forms.ChoiceField(
+        choices=Attendance.ATTENDANCE_CHOICES,
+        widget=forms.RadioSelect,
+        required=True,
+        initial='present'
+    )
+
+    class Meta:
+        model = Attendance
+        fields = ['status']
+
+    def clean_status(self):
+        status = self.cleaned_data.get('status')
+        # If not in POST, use initial
+        if not status and self.initial.get('status'):
+            return self.initial['status']
+        return status
+>>>>>>> 12bb8f8 (commit on 11112025)
