@@ -1,15 +1,9 @@
 from django import forms
-<<<<<<< HEAD
-from .models import Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe
-=======
 from .models import CustomUser,Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance
->>>>>>> 12bb8f8 (commit on 11112025)
 from django.forms import modelformset_factory
 from django.forms import inlineformset_factory
 from django.core.exceptions import ValidationError
 
-<<<<<<< HEAD
-=======
 
 class EmployeeLoginForm(forms.ModelForm):
     employee = forms.ModelChoiceField(
@@ -52,7 +46,6 @@ class EmployeeLoginForm(forms.ModelForm):
             user.save()
         return user
 
->>>>>>> 12bb8f8 (commit on 11112025)
 class SupplierForm(forms.ModelForm):
     supplier_name = forms.CharField(
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Supplier Name', 'required': 'true', 'autocomplete': 'off'})
@@ -558,11 +551,7 @@ WholesaleSalesDetailFormSet = modelformset_factory(
 class EmployeForm(forms.ModelForm):
     class Meta:
         model = Employe
-<<<<<<< HEAD
-        fields = ['emp_id', 'name', 'phone_no', 'address', 'role', 'branch']
-=======
         fields = ['emp_id', 'name', 'phone_no', 'address', 'role', 'branch', 'salary_per_day']
->>>>>>> 12bb8f8 (commit on 11112025)
 
     emp_id = forms.CharField(
         required=True,
@@ -608,13 +597,10 @@ class EmployeForm(forms.ModelForm):
         required=False,  # Optional if staff can be without branch
         empty_label="--- Select Branch ---"
     )
-<<<<<<< HEAD
-=======
     salary_per_day = forms.DecimalField(
         widget=forms.NumberInput(attrs={'class': 'form-control','autocomplete': 'off'}),
         required=True
     )
->>>>>>> 12bb8f8 (commit on 11112025)
 
     def clean_phone_no(self):
         phone = self.cleaned_data.get('phone_no')
@@ -633,8 +619,6 @@ class EmployeForm(forms.ModelForm):
         if Employe.objects.filter(emp_id=emp_id).exclude(pk=self.instance.pk).exists():
             raise forms.ValidationError("This Employee ID is already taken.")
         return emp_id
-<<<<<<< HEAD
-=======
     
 
 class AttendanceInlineForm(forms.ModelForm):
@@ -655,4 +639,3 @@ class AttendanceInlineForm(forms.ModelForm):
         if not status and self.initial.get('status'):
             return self.initial['status']
         return status
->>>>>>> 12bb8f8 (commit on 11112025)

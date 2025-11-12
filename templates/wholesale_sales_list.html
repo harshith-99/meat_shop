@@ -1,36 +1,4 @@
 {% load static %}
-<<<<<<< HEAD
-{% include "sidebar\sidebar.html" %}
-{% load humanize %}
-
-
-    <div class="container-fluid">
-        <h2>Wholesale Sales</h2>
-        {% if is_admin_like %}
-        <form method="get" class="mb-3">
-            <div class="row g-2">
-                <div class="col">
-                    <select name="branch" class="form-select form-select-sm">
-                        <option value="">All Branches</option>
-                        {% for b in branches %}
-                        <option value="{{ b.id }}" {% if selected_branch == b.id|stringformat:"s" %}selected{% endif %}>
-                            {{ b.branch_name }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col"><input type="date" name="from_date" value="{{ from_date }}" class="form-control form-control-sm"></div>
-                <div class="col"><input type="date" name="to_date" value="{{ to_date }}" class="form-control form-control-sm"></div>
-                <div class="col"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
-            </div>
-        </form>
-        {% endif %}
-
-        <div class="card">
-            <div class="card-body">
-                <table class="table table-sm table-bordered">
-                    <thead>
-=======
 {% include "sidebar/sidebar.html" %}
 {% load humanize %}
 
@@ -95,20 +63,12 @@
             <div class="table-responsive">
                 <table class="table table-sm table-bordered">
                     <thead class="table-dark">
->>>>>>> 12bb8f8 (commit on 11112025)
                         <tr>
                             <th>Receipt</th>
                             <th>Date</th>
                             <th>Branch</th>
                             <th>Customer</th>
                             <th>Total</th>
-<<<<<<< HEAD
-                            <th>Print</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for s in sales %}
-=======
                             <th>Paid</th>
                             <th>Balance</th>
                             {% if is_admin_like %}
@@ -120,19 +80,11 @@
                     <tbody>
                         {% for item in sales_data %}
                         {% with s=item.sale %}
->>>>>>> 12bb8f8 (commit on 11112025)
                         <tr>
                             <td>{{ s.receipt_no }}</td>
                             <td>{{ s.sales_date|date:"d/m/Y" }}</td>
                             <td>{{ s.branch.branch_name }}</td>
                             <td>{{ s.customer.customer_name|default:"Walk-in" }}</td>
-<<<<<<< HEAD
-                            <td>₹{{ s.grand_total|floatformat:2|intcomma }}</td>
-                            <td><a href="{% url 'retail_receipt' s.pk %}" target="_blank" class="btn btn-info btn-xs">Print</a></td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="6" class="text-center">No sales</td></tr>
-=======
                             <td class="text-end">₹{{ s.grand_total|floatformat:2|intcomma }}</td>
                             <td class="text-end">₹{{ s.paid_amount|floatformat:2|intcomma }}</td>
                             <td class="text-end {% if item.is_negative_balance %}text-danger{% else %}text-success{% endif %}">
@@ -144,7 +96,7 @@
                                 <a href="{% url 'wholesale_receipt' s.pk %}" target="_blank" class="btn btn-info btn-sm">
                                     Print
                                 </a>
-                                <button onclick="deleteSale({{ s.pk }})" class="btn btn-danger btn-sm">
+                                <button onclick="deleteSale('{{ s.pk }}')" class="btn btn-danger btn-sm">
                                     Delete
                                 </button>
                             </td>
@@ -157,15 +109,12 @@
                                 No wholesale sales found
                             </td>
                         </tr>
->>>>>>> 12bb8f8 (commit on 11112025)
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
-<<<<<<< HEAD
-=======
 </div>
 
 <script>
@@ -183,4 +132,3 @@ function deleteSale(pk) {
     }
 }
 </script>
->>>>>>> 12bb8f8 (commit on 11112025)
