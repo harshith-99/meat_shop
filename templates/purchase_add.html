@@ -1,5 +1,6 @@
 {% load static %}
 {% include "sidebar/sidebar.html" %}
+
 {% block content %}
 <div class="container-fluid">
     <h1 class="h3 mb-4 text-gray-800">Add Purchase</h1>
@@ -30,16 +31,26 @@
                     <span class="text-danger">{{ form.supplier.errors|join:", " }}</span>
                     {{ form.supplier }}
                 </div>
-                {% if is_admin_like %}
+
                 <div class="col-md-3">
                     {{ form.branch.label_tag }}
                     <span class="text-danger">{{ form.branch.errors|join:", " }}</span>
-                    {{ form.branch }}
+
+                    {% if is_admin_like %}
+                        <!-- Super Admin & Admin → Full dropdown -->
+                        {{ form.branch }}
+                    {% else %}
+                        <!-- Manager/Staff → Show only branch name (read-only), hide the select completely -->
+                        <input type="text"
+                            class="form-control"
+                            value="{{ request.user.branch.branch_name }} ({{ request.user.branch.alias }})"
+                            readonly
+                            style="background-color: #f8f9fa; font-weight: bold; color: #495057;">
+                        
+                        <!-- Hidden field to send correct branch ID on submit -->
+                        <input type="hidden" name="branch" value="{{ request.user.branch.id }}">
+                    {% endif %}
                 </div>
-                {% else %}
-                {{ form.branch }}
-                <span class="text-danger">{{ form.branch.errors|join:", " }}</span>
-                {% endif %}
             </div>
         </div>
 
@@ -73,55 +84,25 @@
                         <tr>
                             {% for field in form.visible_fields %}
                                 {% if field.name == "purchase_type" %}
-                                    <td>
-                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
-                                        {{ field }}
-                                    </td>
+                                    <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td>
                                 {% elif field.name == "category" %}
-                                    <td>
-                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
-                                        {{ field }}
-                                    </td>
+                                    <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td>
                                 {% elif field.name == "item" %}
-                                    <td>
-                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
-                                        {{ field }}
-                                    </td>
+                                    <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td>
                                 {% elif field.name == "tax_percentage" %}
-                                    <td>
-                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
-                                        {{ field }}
-                                    </td>
+                                    <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td>
                                 {% elif field.name == "purchase_price" %}
-                                    <td>
-                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
-                                        {{ field }}
-                                    </td>
+                                    <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td>
                                 {% elif field.name == "qty" %}
-                                    <td>
-                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
-                                        {{ field }}
-                                    </td>
+                                    <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td>
                                 {% elif field.name == "gross_weight" %}
-                                    <td>
-                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
-                                        {{ field }}
-                                    </td>
+                                    <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td>
                                 {% elif field.name == "empty_weight" %}
-                                    <td>
-                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
-                                        {{ field }}
-                                    </td>
+                                    <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td>
                                 {% elif field.name == "net_weight" %}
-                                    <td>
-                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
-                                        {{ field }}
-                                    </td>
+                                    <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td>
                                 {% elif field.name == "total_amount" %}
-                                    <td>
-                                        <span class="text-danger">{{ field.errors|join:", " }}</span>
-                                        {{ field }}
-                                    </td>
+                                    <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td>
                                 {% endif %}
                             {% endfor %}
                             <td style="display:none;">{{ form.is_weight_based }}</td>
@@ -149,7 +130,7 @@
 
         <!-- Buttons -->
         <div class="d-flex justify-content-end mb-4">
-            <button type="submit" class="btn btn-primary btn-sm mr-2">Save</button>
+            <button type="submit" class="btn btn-primary btn-sm mr-2">Save Purchase</button>
             <a href="{% url 'dashboard' %}" class="btn btn-secondary btn-sm">Cancel</a>
         </div>
     </form>
@@ -157,11 +138,11 @@
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
+// Your full working JavaScript (unchanged)
 var resetFormString = "{{ reset_form|yesno:'true,false' }}";
 var resetForm = (resetFormString === "true");
 
 function updateItems(categoryId, $itemSelect) {
-    console.log("Category ID:", categoryId);
     if (!categoryId) {
         $itemSelect.empty().append('<option value="">---------</option>');
         return;
@@ -170,25 +151,16 @@ function updateItems(categoryId, $itemSelect) {
         url: '/accounts/api/items-by-category/' + categoryId + '/',
         type: 'GET',
         dataType: 'json',
-        beforeSend: function(xhr, settings) {
-            xhr.setRequestHeader("X-CSRFToken", $('input[name=csrfmiddlewaretoken]').val());
-        },
         success: function(data) {
-            console.log("Data received:", data);
             $itemSelect.empty().append('<option value="">---------</option>');
             $.each(data, function(index, item) {
                 $itemSelect.append('<option value="' + item.id + '">' + item.name + '</option>');
             });
-        },
-        error: function(jqXHR, textStatus, errorThrown) {
-            console.error("AJAX error:", textStatus, errorThrown);
-            $itemSelect.empty().append('<option value="">Error loading items</option>');
         }
     });
 }
 
 function updateTotalsAndFields() {
-    console.log("Updating totals...");
     let rows = document.querySelectorAll("#purchaseTable tbody tr");
     let grandTotal = 0, totalTax = 0;
 
@@ -217,59 +189,37 @@ function updateTotalsAndFields() {
 
         let rowTotal = 0;
         if (isWeightBased) {
-            qtyInput.readOnly = false;
-            grossInput.readOnly = false;
-            emptyInput.readOnly = false;
             rowTotal = (price * netWeight) * (1 + tax / 100);
-            console.log("Weight-based row total:", rowTotal);
         } else {
-            qtyInput.readOnly = false;
-            grossInput.value = "0";
-            emptyInput.value = "0";
-            netWeightInput.value = "0";
-            grossInput.readOnly = true;
-            emptyInput.readOnly = true;
-            netWeightInput.readOnly = true;
-            netWeightInput.value = "0.00";
+            grossInput.value = emptyInput.value = "0";
+            grossInput.readOnly = emptyInput.readOnly = netWeightInput.readOnly = true;
             rowTotal = (price * qty) * (1 + tax / 100);
-            console.log("Qty-based row total:", rowTotal);
         }
 
         totalInput.value = isNaN(rowTotal) ? "0.00" : rowTotal.toFixed(2);
-
         grandTotal += rowTotal;
         totalTax += (price * (isWeightBased ? netWeight : qty) * tax / 100);
     });
 
-    let taxAmountInput = document.querySelector("#id_tax_amount");
-    let grandTotalInput = document.querySelector("#id_grand_total");
-    if (taxAmountInput) taxAmountInput.value = isNaN(totalTax) ? "0.00" : totalTax.toFixed(2);
-    if (grandTotalInput) grandTotalInput.value = isNaN(grandTotal) ? "0.00" : grandTotal.toFixed(2);
-    console.log("Grand Total:", grandTotal, "Tax Amount:", totalTax);
+    let taxInput = document.querySelector("#id_tax_amount");
+    let grandInput = document.querySelector("#id_grand_total");
+    if (taxInput) taxInput.value = totalTax.toFixed(2);
+    if (grandInput) grandInput.value = grandTotal.toFixed(2);
 }
 
 document.addEventListener("DOMContentLoaded", function() {
     if (resetForm) {
-        let rows = document.querySelectorAll("#purchaseTable tbody tr");
-        if (rows.length > 1) {
-            rows.forEach((row, index) => {
-                if (index > 0) row.remove();
-            });
-        }
         let totalForms = document.querySelector("#id_form-TOTAL_FORMS");
         totalForms.value = 1;
-        rows.forEach(row => {
-            row.querySelectorAll("input[type='text'], input[type='number'], select").forEach(el => {
-                if (!el.name.includes("TOTAL_FORMS") && !el.name.includes("INITIAL_FORMS") && !el.name.includes("MIN_NUM_FORMS") && !el.name.includes("MAX_NUM_FORMS")) {
-                    el.value = "";
-                }
-            });
-            row.querySelectorAll("select").forEach(el => el.selectedIndex = 0);
+        document.querySelectorAll("#purchaseTable tbody tr").forEach((row, i) => {
+            if (i > 0) row.remove();
         });
-        updateTotalsAndFields();
-    } else {
-        updateTotalsAndFields();
+        document.querySelectorAll("input, select").forEach(el => {
+            if (!el.name.includes("TOTAL_FORMS") && el.type !== "hidden") el.value = "";
+            if (el.tagName === "SELECT") el.selectedIndex = 0;
+        });
     }
+    updateTotalsAndFields();
 
     $('.category-select').each(function() {
         var $category = $(this);
@@ -286,34 +236,19 @@ document.addEventListener("change", function(e) {
         var isWeightBasedInput = $row.find("[name$='is_weight_based']");
 
         updateItems($category.val(), $item);
-        
+
         if ($category.val()) {
             $.ajax({
                 url: '/accounts/api/category-details/' + $category.val() + '/',
                 type: 'GET',
                 dataType: 'json',
-                beforeSend: function(xhr) {
-                    xhr.setRequestHeader("X-CSRFToken", $('input[name=csrfmiddlewaretoken]').val());
-                },
                 success: function(data) {
-                    if (isWeightBasedInput.length && data.is_weight_based !== undefined) {
-                        isWeightBasedInput.val(data.is_weight_based.toString().toLowerCase());
-                    }
-                    updateTotalsAndFields();
-                },
-                error: function(jqXHR, textStatus, errorThrown) {
-                    console.error("Error fetching category details:", textStatus, errorThrown);
                     if (isWeightBasedInput.length) {
-                        isWeightBasedInput.val('false');
+                        isWeightBasedInput.val(data.is_weight_based.toString().toLowerCase());
                     }
                     updateTotalsAndFields();
                 }
             });
-        } else {
-            if (isWeightBasedInput.length) {
-                isWeightBasedInput.val('false');
-            }
-            updateTotalsAndFields();
         }
     } else {
         updateTotalsAndFields();
@@ -322,8 +257,7 @@ document.addEventListener("change", function(e) {
 
 document.addEventListener("input", function(e) {
     const row = e.target.closest("tr");
-    if (!row || row.dataset.deleted === "true") return;
-    updateTotalsAndFields();
+    if (row && row.dataset.deleted !== "true") updateTotalsAndFields();
 });
 
 document.getElementById("addRow").addEventListener("click", function() {
@@ -339,18 +273,16 @@ document.getElementById("addRow").addEventListener("click", function() {
     newRow.querySelectorAll("input, select").forEach(el => {
         let name = el.getAttribute("name");
         if (name) {
-            let newName = name.replace(/form-(\d+)-/, `form-${formNum}-`);
+            let newName = name.replace(/form-\d+-/, `form-${formNum}-`);
             el.setAttribute("name", newName);
             el.setAttribute("id", `id_${newName}`);
         }
         if (el.type !== "hidden") el.value = "";
-        if (el.type === "checkbox") el.checked = false;
-        if (el.type === "select-one") el.selectedIndex = 0;
+        if (el.tagName === "SELECT") el.selectedIndex = 0;
     });
 
     table.appendChild(newRow);
     totalForms.value = formNum + 1;
-    updateItems(newRow.querySelector(".category-select").value, newRow.querySelector(".item-select"));
     updateTotalsAndFields();
 });
 

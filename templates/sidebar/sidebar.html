@@ -69,9 +69,9 @@
                     <div class="bg-white py-2 collapse-inner rounded">
                         <a class="collapse-item" href="{% url 'purchase_add' %}">Purchase Entry</a>
                         <a class="collapse-item" href="{% url 'purchase_list' %}">Purchase Details</a>
-
-                        {% if request.user.role == 'admin' or request.user.role == 'super_admin' or request.user.role == 'manager' %}
                         <a class="collapse-item" href="{% url 'supplier_list' %}">Supplier</a>
+                        {% if request.user.role == 'admin' or request.user.role == 'super_admin' %}
+                        
                         <a class="collapse-item" href="{% url 'supplier_pay' %}">Supplier Payment</a>
                         <a class="collapse-item" href="{% url 'supplier_payment_list' %}">Supplier Payment List</a>
                         {% endif %}
@@ -113,7 +113,7 @@
                 </div>
             </li>
 
-             {% if request.user.role == 'admin' or request.user.role == 'super_admin' or request.user.role == 'manager' %}
+             {% if request.user.role == 'admin' or request.user.role == 'super_admin'%}
                 <li class="nav-item">
                     <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapsePages4"
                         aria-expanded="true" aria-controls="collapsePages4">

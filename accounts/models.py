@@ -7,6 +7,7 @@ from django.utils import timezone
 class Branch(models.Model):
     branch_id = models.AutoField(primary_key=True)
     branch_name = models.CharField(max_length=100)
+    alias  = models.CharField(max_length=10)
     branch_address = models.TextField()
 
     def __str__(self):
@@ -118,6 +119,25 @@ class Customer(models.Model):
 
     def __str__(self):
         return self.customer_name or self.customer_phone or "Customer"
+    
+class Employe(models.Model):
+    emp_id = models.CharField(max_length=20, unique=True)
+    name = models.CharField(max_length=100)
+    phone_no = models.CharField(max_length=15)
+    address = models.TextField()
+    ROLE_CHOICES = (
+        ('staff', 'Staff'),
+        ('manager', 'Manager'),
+        ('admin', 'Admin'),
+    )
+    role = models.CharField(max_length=20,choices=ROLE_CHOICES, default='staff')
+    salary_per_day = models.DecimalField(max_digits=10, decimal_places=2)
+    branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True, blank=True)
+    created_date = models.DateTimeField(auto_now_add=True)
+    delete_status = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.name
 
 class RetailSales(models.Model):
     receipt_no = models.CharField(max_length=20, unique=True)
@@ -133,9 +153,10 @@ class RetailSales(models.Model):
     delete_status = models.BooleanField(default=False)
     payment_mode = models.CharField(
         max_length=20,
-        choices=(('cash', 'Cash'), ('online', 'Online')),
+        choices=(('cash', 'Cash'), ('online', 'Online'), ('pending', 'Pending')),
         default='cash'
     )
+    take_amay_employee = models.ForeignKey(Employe, on_delete=models.PROTECT, null=True, blank=True)
 
 class RetailSalesDetails(models.Model):
     sales = models.ForeignKey(RetailSales,on_delete=models.CASCADE, related_name='details')
@@ -179,24 +200,6 @@ class WholesaleSalesDetails(models.Model):
     tax_percentage = models.DecimalField(max_digits=5, decimal_places=2)
     price_per_unit = models.DecimalField(max_digits=10, decimal_places=2)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
-
-
-class Employe(models.Model):
-    emp_id = models.CharField(max_length=20, unique=True)
-    name = models.CharField(max_length=100)
-    phone_no = models.CharField(max_length=15)
-    address = models.TextField()
-    ROLE_CHOICES = (
-        ('staff', 'Staff'),
-        ('manager', 'Manager'),
-        ('admin', 'Admin'),
-    )
-    role = models.CharField(max_length=20,choices=ROLE_CHOICES, default='staff')
-    salary_per_day = models.DecimalField(max_digits=10, decimal_places=2)
-    branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True, blank=True)
-    created_date = models.DateTimeField(auto_now_add=True)
-    delete_status = models.BooleanField(default=False)
-
 
 
 ATTENDANCE_CHOICES = (

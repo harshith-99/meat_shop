@@ -1,5 +1,5 @@
 {% load static %}
-{% include "sidebar\sidebar.html" %}
+{% include "sidebar/sidebar.html" %}
 {% block content %}
 <div class="container mt-4">
     <h2>Item List</h2>
@@ -21,7 +21,7 @@
                 <th>Price Per Unit Wholesale</th>
                 <th>Unit</th>
                 <th>Stock</th>
-                {% if request.user.role == 'admin' or request.user.role == 'super_admin' or request.user.role == 'manager'%}
+                {% if request.user.role == 'admin' or request.user.role == 'super_admin'%}
                     <th>Actions</th>
                 {% endif %}
             </tr>
@@ -37,7 +37,7 @@
                 <td>{{ i.price_per_unit_wholesale }}</td>
                 <td>{{ i.unit }}</td>
                 <td>{{ i.stock }}</td>
-                {% if request.user.role == 'admin' or request.user.role == 'super_admin' or request.user.role == 'manager'%}
+                {% if request.user.role == 'admin' or request.user.role == 'super_admin'%}
                     <td>
                         <a href="{% url 'item_update' i.id %}" class="btn btn-warning btn-sm">Update</a>
                         <a href="{% url 'item_delete' i.id %}" class="btn btn-danger btn-sm"

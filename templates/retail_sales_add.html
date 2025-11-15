@@ -1,5 +1,6 @@
 {% load static %}
 {% include "sidebar/sidebar.html" %}
+
 {% block content %}
 <div class="container-fluid">
     <h1 class="h3 mb-4 text-gray-800">Retail Sales</h1>
@@ -34,16 +35,20 @@
         <div class="card shadow mb-4">
             {{ form.non_field_errors }}
             <div class="row p-3">
+                <!-- Receipt No - Clean & Single Field -->
                 <div class="col-md-3">
                     {{ form.receipt_no.label_tag }}
-                    <span class="text-danger">{{ form.receipt_no.errors|join:", " }}</span>
-                    {{ form.receipt_no }}
+                    <div class="input-group">
+                        {{ form.receipt_no }} <!-- Hidden but required for form submission -->
+                    </div>
                 </div>
+
                 <div class="col-md-3">
                     {{ form.sales_date.label_tag }}
                     <span class="text-danger">{{ form.sales_date.errors|join:", " }}</span>
                     {{ form.sales_date }}
                 </div>
+
                 {% if is_admin_like %}
                 <div class="col-md-3">
                     {{ form.branch.label_tag }}
@@ -51,9 +56,29 @@
                     {{ form.branch }}
                 </div>
                 {% else %}
-                {{ form.branch }}
-                <span class="text-danger">{{ form.branch.errors|join:", " }}</span>
+                <div class="col-md-3">
+                    {{ form.branch.label_tag }}
+                    <span class="text-danger">{{ form.branch.errors|join:", " }}</span>
+
+                    {% if is_admin_like %}
+                        <!-- Super Admin / Admin → Full dropdown to select branch -->
+                        {{ form.branch }}
+                    {% else %}
+                        <!-- Manager / Staff → Only show branch name, NO duplicate select -->
+                        <div class="form-control" style="background-color: #f8f9fa; font-weight: bold; height: 38px; padding: 8px 12px; color: #495057;">
+                            {{ request.user.branch.branch_name }} ({{ request.user.branch.alias|default:"--" }})
+                        </div>
+                        <!-- Hidden field to submit correct branch ID -->
+                        <input type="hidden" name="branch" value="{{ request.user.branch.id }}">
+                    {% endif %}
+                </div>
                 {% endif %}
+
+                <div class="col-md-3">
+                    {{ form.take_amay_employee.label_tag }}
+                    <span class="text-danger">{{ form.take_amay_employee.errors|join:", " }}</span>
+                    {{ form.take_amay_employee }}
+                </div>
             </div>
         </div>
 
@@ -182,7 +207,31 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
 <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/smoothness/jquery-ui.css">
+
 <script>
+// Auto change payment mode when take-away employee is selected
+$(document).on('change', '#id_take_amay_employee', function() {
+    if ($(this).val() && $(this).val() !== '') {
+        $('#id_payment_mode').val('pending');
+    }
+});
+
+// Trigger on page load
+$(document).ready(function() {
+    setTimeout(() => {
+        $('#id_take_amay_employee').trigger('change');
+    }, 100);
+
+    // Admin: Reload page with branch param to update receipt number
+    $('#id_branch').on('change', function() {
+        const branchId = $(this).val();
+        if (branchId) {
+            window.location.href = "{% url 'retail_sales_add' %}?branch=" + branchId;
+        }
+    });
+});
+
+// === YOUR FULL WORKING CALCULATION & AUTOCOMPLETE JS BELOW (UNCHANGED) ===
 function updateTotalsAndFields() {
     let rows = document.querySelectorAll("#salesTable tbody tr");
     let grandTotal = 0, totalTax = 0;
@@ -198,7 +247,7 @@ function updateTotalsAndFields() {
         let itemInput = row.querySelector("[name$='item']");
 
         let isWeightBased = false;
-        if (itemInput.value) {
+        if (itemInput && itemInput.value) {
             $.ajax({
                 url: '/accounts/api/item-details/' + itemInput.value + '/',
                 type: 'GET',
@@ -241,53 +290,44 @@ function updateTotalsAndFields() {
 document.addEventListener("DOMContentLoaded", function() {
     updateTotalsAndFields();
 
-    $("#id_customer_name").autocomplete({
+    // Customer Autocomplete
+    $("#id_customer_name, #id_customer_phone").autocomplete({
         source: function(request, response) {
-            $.get('/accounts/api/search_customers/', {type: 'name', q: request.term}, function(data) {
-                response(data.map(function(c) {
-                    return {label: c.name + ' (' + c.phone + ')', value: c.name, customer: c};
-                }));
+            const field = this.element.attr('id') === 'id_customer_phone' ? 'phone' : 'name';
+            $.get('/accounts/api/search_customers/', {type: field, q: request.term}, function(data) {
+                response(data.map(c => ({
+                    label: field === 'phone' ? `${c.phone} (${c.name})` : `${c.name} (${c.phone})`,
+                    value: field === 'phone' ? c.phone : c.name,
+                    customer: c
+                })));
             });
         },
         select: function(event, ui) {
-            var c = ui.item.customer;
+            const c = ui.item.customer;
             $("#customer_id").val(c.id);
+            $("#id_customer_name").val(c.name);
             $("#id_customer_phone").val(c.phone);
             $("#id_customer_address").val(c.address);
             $("#id_gstin").val(c.gstin);
         }
     });
 
-    $("#id_customer_phone").autocomplete({
-        source: function(request, response) {
-            $.get('/accounts/api/search_customers/', {type: 'phone', q: request.term}, function(data) {
-                response(data.map(function(c) {
-                    return {label: c.phone + ' (' + c.name + ')', value: c.phone, customer: c};
-                }));
-            });
-        },
-        select: function(event, ui) {
-            var c = ui.item.customer;
-            $("#customer_id").val(c.id);
-            $("#id_customer_name").val(c.name);
-            $("#id_customer_address").val(c.address);
-            $("#id_gstin").val(c.gstin);
-        }
-    });
-
+    // Item Search
     $(document).on("focus", ".item-name", function() {
         if (!$(this).data("ui-autocomplete")) {
             $(this).autocomplete({
                 source: function(request, response) {
                     $.get('/accounts/api/search_items/', {q: request.term}, function(data) {
-                        response(data.map(function(item) {
-                            return {label: item.name + ' (' + item.code + ')', value: item.name, item: item};
-                        }));
+                        response(data.map(item => ({
+                            label: `${item.name} (${item.code})`,
+                            value: item.name,
+                            item: item
+                        })));
                     });
                 },
                 select: function(event, ui) {
-                    var item = ui.item.item;
-                    var row = $(this).closest('tr');
+                    const item = ui.item.item;
+                    const row = $(this).closest('tr');
                     row.find('.item-code').val(item.code);
                     row.find('[name$="price_per_unit"]').val(item.price);
                     row.find('[name$="item"]').val(item.id);
@@ -298,9 +338,9 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 
     $(document).on("change", ".item-code", function() {
-        var code = $(this).val();
+        const code = $(this).val().trim();
         if (code) {
-            var row = $(this).closest('tr');
+            const row = $(this).closest('tr');
             $.get('/accounts/api/item_by_code/', {code: code}, function(data) {
                 if (!data.error) {
                     row.find('.item-name').val(data.name);
@@ -319,19 +359,19 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 
     $("#addRow").click(function() {
-        let table = $("#salesTable tbody");
-        let totalForms = $("#id_form-TOTAL_FORMS");
+        const table = $("#salesTable tbody");
+        const totalForms = $("#id_form-TOTAL_FORMS");
         let formNum = parseInt(totalForms.val());
-        let firstRow = table.find("tr:first");
+        const firstRow = table.find("tr:first");
         if (!firstRow.length) return;
 
-        let newRow = firstRow.clone(true);
+        const newRow = firstRow.clone(true);
         newRow.attr('data-deleted', "false");
 
         newRow.find("input, select").each(function() {
-            let name = $(this).attr("name");
+            const name = $(this).attr("name");
             if (name) {
-                let newName = name.replace(/form-(\d+)-/, `form-${formNum}-`);
+                const newName = name.replace(/form-\d+-/, `form-${formNum}-`);
                 $(this).attr("name", newName);
                 $(this).attr("id", `id_${newName}`);
             }
@@ -345,7 +385,7 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 
     $(document).on("click", ".remove-row", function() {
-        let row = $(this).closest("tr");
+        const row = $(this).closest("tr");
         row.attr('data-deleted', "true");
         row.hide();
         row.find("input[name$='-DELETE']").prop("checked", true);

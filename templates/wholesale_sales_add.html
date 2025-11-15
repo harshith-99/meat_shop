@@ -25,16 +25,23 @@
                     <span class="text-danger">{{ form.sales_date.errors|join:", " }}</span>
                     {{ form.sales_date }}
                 </div>
-                {% if is_admin_like %}
+              <!-- Branch Field - Fixed: No Duplicates -->
                 <div class="col-md-3">
                     {{ form.branch.label_tag }}
                     <span class="text-danger">{{ form.branch.errors|join:", " }}</span>
-                    {{ form.branch }}
+
+                    {% if is_admin_like %}
+                        <!-- Admin can select branch -->
+                        {{ form.branch }}
+                    {% else %}
+                        <!-- Staff/Manager: Show only their branch (read-only) -->
+                        <div class="form-control" style="background-color: #f8f9fa; font-weight: bold; height: 38px; padding: 8px 12px; color: #495057;">
+                            {{ request.user.branch.branch_name }} ({{ request.user.branch.alias|default:"--" }})
+                        </div>
+                        <!-- Hidden input to submit correct branch ID -->
+                        <input type="hidden" name="branch" value="{{ request.user.branch.id }}">
+                    {% endif %}
                 </div>
-                {% else %}
-                {{ form.branch }}
-                <span class="text-danger">{{ form.branch.errors|join:", " }}</span>
-                {% endif %}
             </div>
         </div>
 
@@ -275,7 +282,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     var item = ui.item.item;
                     var row = $(this).closest('tr');
                     row.find('.item-code').val(item.code);
-                    row.find('[name$="price_per_unit"]').val(item.price);
+                    row.find('[name$="price_per_unit"]').val(item.wholesale_price);
                     row.find('[name$="item"]').val(item.id);
                     updateTotalsAndFields();
                 }
@@ -290,7 +297,7 @@ document.addEventListener("DOMContentLoaded", function() {
             $.get('/accounts/api/item_by_code/', {code: code}, function(data) {
                 if (!data.error) {
                     row.find('.item-name').val(data.name);
-                    row.find('[name$="price_per_unit"]').val(data.price);
+                    row.find('[name$="price_per_unit"]').val(data.wholesale_price);
                     row.find('[name$="item"]').val(data.id);
                     updateTotalsAndFields();
                 } else {

@@ -1,5 +1,5 @@
 {% load static %}
-{% include "sidebar\sidebar.html" %}
+{% include "sidebar/sidebar.html" %}
 {% block content %}
 <div class="container mt-4">
     <h2>Supplier List</h2>
@@ -29,7 +29,7 @@
                 <td>{{ s.phone_no }}</td>
                 <td>{{ s.email }}</td>
                 <td>{{ s.gstin }}</td>
-                {% if request.user.role == 'admin' or request.user.role == 'super_admin' or request.user.role == 'manager'%}
+                {% if request.user.role == 'admin' or request.user.role == 'super_admin' %}
                     <td>
                         <a href="{% url 'supplier_update' s.supplier_id %}" class="btn btn-warning btn-sm">Update</a>
                         <a href="{% url 'supplier_delete' s.supplier_id %}" class="btn btn-danger btn-sm"

@@ -5,7 +5,7 @@
 <div class="container-fluid">
     <h1 class="h3 mb-4 text-gray-800">Retail Sales Report</h1>
 
-    <!-- FILTER FORM (NO CSRF!) -->
+    <!-- FILTER FORM -->
     <div class="card shadow mb-3">
         <div class="card-body">
             <form method="get">
@@ -14,9 +14,9 @@
                     <div class="col-md-3">
                         <label class="form-label">Branch</label>
                         <select name="branch" class="form-select form-select-sm">
-                            <option value="">All Branches</option>
+                            <option value="" {% if not selected_branch %}selected{% endif %}>All Branches</option>
                             {% for b in branches %}
-                            <option value="{{ b.id }}" {% if selected_branch == b.id %}selected{% endif %}>
+                            <option value="{{ b.branch_id }}" {% if selected_branch == b.branch_id %}selected{% endif %}>
                                 {{ b.branch_name }}
                             </option>
                             {% endfor %}
@@ -25,11 +25,11 @@
                     {% endif %}
                     <div class="col-md-2">
                         <label class="form-label">From Date</label>
-                        <input type="date" name="from_date" value="{{ from_date }}" class="form-control form-control-sm">
+                        <input type="date" name="from_date" value="{{ from_date_str }}" class="form-control form-control-sm">
                     </div>
                     <div class="col-md-2">
                         <label class="form-label">To Date</label>
-                        <input type="date" name="to_date" value="{{ to_date }}" class="form-control form-control-sm">
+                        <input type="date" name="to_date" value="{{ to_date_str }}" class="form-control form-control-sm">
                     </div>
                     <div class="col">
                         <button type="submit" class="btn btn-primary btn-sm">Filter</button>
@@ -48,10 +48,10 @@
                     <strong>Branch:</strong> {{ selected_branch_name }}
                 </div>
                 <div class="col">
-                    <strong>From:</strong> {{ from_date|date:"d/m/Y" }}
+                    <strong>From:</strong> {{ from_date|date:"d-m-Y" }}
                 </div>
                 <div class="col">
-                    <strong>To:</strong> {{ to_date|date:"d/m/Y" }}
+                    <strong>To:</strong> {{ to_date|date:"d-m-Y" }}
                 </div>
             </div>
         </div>
@@ -111,10 +111,10 @@
     </div>
 </div>
 
-<!-- CSRF TOKEN (HIDDEN) -->
+<!-- CSRF TOKEN -->
 <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
 
-<!-- DELETE SCRIPT (SIMPLE + CSRF) -->
+<!-- DELETE SCRIPT -->
 <script>
 function deleteSale(pk) {
     if (!confirm('Delete this sale? Stock will be restored.')) return;
@@ -129,7 +129,7 @@ function deleteSale(pk) {
         },
         body: JSON.stringify({})
     })
-    .then(response => response.json())
+    .then(r => r.json())
     .then(data => {
         if (data.success) {
             alert('Sale deleted!');

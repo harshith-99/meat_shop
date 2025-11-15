@@ -129,13 +129,17 @@ class BranchForm(forms.ModelForm):
     branch_name = forms.CharField(
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Branch Name', 'required': 'true', 'autocomplete': 'off'})
     )
+    alias = forms.CharField(
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Initials', 'required': 'true', 'autocomplete': 'off'}),
+        label='Initials'
+    )
     branch_address = forms.CharField(
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Branch Address', 'required': 'true', 'autocomplete': 'off'})
     )
 
     class Meta:
         model = Branch
-        fields = ['branch_name', 'branch_address']
+        fields = ['branch_name','alias','branch_address']
 
 class ItemCategoryForm(forms.ModelForm):
     category_name = forms.CharField(
@@ -380,7 +384,7 @@ class CustomerForm(forms.ModelForm):
 class RetailSalesForm(forms.ModelForm):
     class Meta:
         model = RetailSales
-        fields = ['receipt_no', 'sales_date', 'branch', 'tax_amount', 'grand_total', 'payment_mode']
+        fields = ['receipt_no', 'sales_date', 'branch', 'tax_amount', 'grand_total', 'payment_mode','take_amay_employee']
 
     receipt_no = forms.CharField(
         widget=forms.TextInput(attrs={'class': 'form-control', 'readonly': True, 'autocomplete': 'off'})
@@ -402,8 +406,14 @@ class RetailSalesForm(forms.ModelForm):
         required=False
     )
     payment_mode = forms.ChoiceField(
-        choices=(('cash', 'Cash'), ('online', 'Online')),
+        choices=(('cash', 'Cash'), ('online', 'Online'), ('pending', 'Pending')),
         widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'})
+    )
+    take_amay_employee = forms.ModelChoiceField(
+        queryset=Employe.objects.all(),
+        widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+        required=False,
+        label="Take Away"
     )
 
     def __init__(self, *args, user=None, **kwargs):

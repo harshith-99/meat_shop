@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 @login_required
 def employee_login_create(request):
-    if request.user.role not in ['super_admin', 'admin', 'manager']:
+    if request.user.role not in ['super_admin', 'admin']:
         messages.error(request, "You are not authorized.")
         return redirect('dashboard')
 
@@ -105,7 +105,7 @@ def supplier_pay(request):
 
 @login_required
 def supplier_payment_list(request):
-    is_manager = request.user.role in ['manager', 'admin', 'super_admin']
+    is_manager = request.user.role in ['admin', 'super_admin']
 
     supplier_id = request.GET.get('supplier')
     from_date = request.GET.get('from_date')
@@ -140,7 +140,8 @@ def supplier_payment_list(request):
         ),
         total_paid=Sum(
             'supplierpay__amount',
-            filter=Q(supplierpay__delete_status=False)
+            filter=Q(supplierpay__delete_status=False),
+            distinct=True
         )
     ).annotate(
         balance=F('total_purchase') - F('total_paid')
@@ -166,7 +167,7 @@ def supplier_payment_list(request):
 
 @login_required
 def supplier_payment_update(request, pk):
-    if request.user.role not in ['manager', 'admin', 'super_admin']:
+    if request.user.role not in ['admin', 'super_admin']:
         messages.error(request, "You are not authorized.")
         return redirect('supplier_payment_list')
 
@@ -184,7 +185,7 @@ def supplier_payment_update(request, pk):
 
 @login_required
 def supplier_payment_delete(request, pk):
-    if request.user.role not in ['manager', 'admin', 'super_admin']:
+    if request.user.role not in ['admin', 'super_admin']:
         messages.error(request, "You are not authorized.")
         return redirect('supplier_payment_list')
 
@@ -365,7 +366,7 @@ def item_delete(request, pk):
 
 @login_required
 def purchase_add(request):
-    is_admin_like = request.user.role in ['super_admin', 'admin', 'manager']
+    is_admin_like = request.user.role in ['super_admin', 'admin']
     if request.method == "POST":
         form = PurchaseForm(request.POST, user=request.user)
         formset = PurchaseDetailFormSet(request.POST)
@@ -513,11 +514,8 @@ def purchase_view(request, pk):
         formset = PurchaseDetailFormSet(instance=purchase)
 
     context = {
-        'form': form,
-        'formset': formset,
         'purchase': purchase,
         'is_admin_like': is_admin_like,
-        'reset_form': False
     }
     return render(request, 'purchase_view.html', context)
 
@@ -546,13 +544,7 @@ def purchase_delete(request, pk):
     return redirect('purchase_list')
 
 def get_or_create_customer(data, customer_id=None):
-    """
-    Returns (customer_instance, created)
-    - If customer_id → get it
-    - Else: search by phone → reuse
-    - Else: search by gstin → reuse
-    - Else: create new
-    """
+
     if customer_id:
         try:
             return Customer.objects.get(id=customer_id), False
@@ -584,24 +576,83 @@ def get_or_create_customer(data, customer_id=None):
 
     return None, False
 
+def generate_next_receipt(branch_alias):
+
+    if not branch_alias:
+        branch_alias = "XX"  # fallback
+
+    prefix = branch_alias.upper()
+
+    # Find the last retail sale for this branch prefix
+    last_sale = RetailSales.objects.filter(
+        receipt_no__istartswith=prefix + '-',
+        delete_status=False
+    ).order_by('-id').first()
+
+    if last_sale and '-' in last_sale.receipt_no:
+        try:
+            num_part = last_sale.receipt_no.split('-', 1)[1]
+            num = int(''.join(filter(str.isdigit, num_part)))
+            next_num = num + 1
+            return f"{prefix}-{next_num:04d}"
+        except (ValueError, IndexError):
+            pass
+
+    # If no valid last receipt or parsing failed
+    return f"{prefix}-0001"
+
 @login_required
 def retail_receipt(request, pk):
     sale = get_object_or_404(RetailSales, pk=pk, delete_status=False)
     return render(request, 'retail_receipt.html', {'sale': sale})
 
+from django.db.models import Max
+
+def generate_next_receipt(branch_alias):
+    """Generate next receipt like AK-0001, BK-0005"""
+    if not branch_alias:
+        branch_alias = "XX"
+    prefix = branch_alias.upper().strip()
+
+    # Get the highest number used with this prefix
+    last = RetailSales.objects.filter(
+        receipt_no__istartswith=prefix + '-',
+        delete_status=False
+    ).aggregate(max_id=Max('id'))
+
+    if last['max_id']:
+        # Try to extract number from existing receipts
+        similar = RetailSales.objects.filter(
+            receipt_no__istartswith=prefix + '-',
+            delete_status=False
+        ).order_by('-receipt_no').first()
+
+        if similar and similar.receipt_no:
+            try:
+                num_part = similar.receipt_no.split('-')[1]
+                num = int(''.join(filter(str.isdigit, num_part)))
+                return f"{prefix}-{num + 1:04d}"
+            except:
+                pass
+
+    return f"{prefix}-0001"
+
+
 @login_required
 def retail_sales_add(request):
-    is_admin_like = request.user.role in ['super_admin', 'admin', 'manager']
+    is_admin_like = request.user.role in ['super_admin', 'admin']
+
     if request.method == "POST":
         customer_id = request.POST.get('customer_id')
         form = RetailSalesForm(request.POST, user=request.user)
         formset = RetailSalesDetailFormSet(request.POST)
         customer_form = CustomerForm(request.POST, customer_id=customer_id)
-        customer_form.is_valid()  # Required for cleaned_data
+        customer_form.is_valid()
 
         if form.is_valid() and formset.is_valid():
             receipt_no = form.cleaned_data['receipt_no'].strip()
 
+            # Prevent duplicate receipt across all branches
             if RetailSales.objects.filter(receipt_no__iexact=receipt_no).exists():
                 messages.error(request, f"Receipt number '{receipt_no}' already exists!")
                 return render(request, "retail_sales_add.html", {
@@ -615,10 +666,11 @@ def retail_sales_add(request):
                 if not is_admin_like:
                     sales.branch = request.user.branch
 
+                # Customer logic
                 customer_data = customer_form.cleaned_data
                 customer, created = get_or_create_customer(customer_data, customer_id)
                 if not customer:
-                    messages.error(request, "Customer must have a name or phone number.")
+                    messages.error(request, "Customer must have a name or phone.")
                     return render(request, "retail_sales_add.html", {
                         'form': form, 'formset': formset,
                         'customer_form': customer_form, 'is_admin_like': is_admin_like
@@ -626,7 +678,7 @@ def retail_sales_add(request):
                 sales.customer = customer
                 sales.save()
 
-                # === STOCK CHECK + SAVE ===
+                # Save items and deduct stock
                 for detail in formset:
                     if detail.cleaned_data and not detail.cleaned_data.get('DELETE'):
                         detail_instance = detail.save(commit=False)
@@ -639,22 +691,15 @@ def retail_sales_add(request):
 
                         if item.category.is_weight_based:
                             if item.stock < net_weight:
-                                messages.error(request, f"Not enough stock for {item.name} (Available: {item.stock} kg, Need: {net_weight} kg)")
-                                return render(request, "retail_sales_add.html", {
-                                    'form': form, 'formset': formset,
-                                    'customer_form': customer_form, 'is_admin_like': is_admin_like
-                                })
+                                messages.error(request, f"Low stock: {item.name}")
+                                raise transaction.TransactionManagementError()
                             item.stock -= net_weight
                         else:
                             if item.stock < qty:
-                                messages.error(request, f"Not enough stock for {item.name} (Available: {item.stock}, Need: {qty})")
-                                return render(request, "retail_sales_add.html", {
-                                    'form': form, 'formset': formset,
-                                    'customer_form': customer_form, 'is_admin_like': is_admin_like
-                                })
+                                messages.error(request, f"Low stock: {item.name}")
+                                raise transaction.TransactionManagementError()
                             item.stock -= qty
                         item.save()
-                # ===========================
 
                 messages.success(request, f"Retail sale {receipt_no} saved!")
                 return redirect('retail_receipt', pk=sales.pk)
@@ -663,32 +708,57 @@ def retail_sales_add(request):
             messages.error(request, "Please correct the errors below.")
 
     else:
+        # === GET Request: Generate correct receipt number ===
+        selected_branch = None
+
+        if is_admin_like:
+            branch_id = request.GET.get('branch')
+            if branch_id:
+                try:
+                    selected_branch = Branch.objects.get(branch_id=branch_id)
+                except Branch.DoesNotExist:
+                    selected_branch = Branch.objects.first()
+            else:
+                selected_branch = Branch.objects.first()
+        else:
+            selected_branch = request.user.branch  # Staff uses their branch
+
+        receipt_no = generate_next_receipt(selected_branch.alias if selected_branch else None)
+
         initial = {
-            'receipt_no': generate_next_receipt(),
+            'receipt_no': receipt_no,
             'sales_date': date.today(),
             'payment_mode': 'cash',
         }
-        if not is_admin_like and request.user.branch:
-            initial['branch'] = request.user.branch
+        if selected_branch:
+            initial['branch'] = selected_branch
+
         form = RetailSalesForm(initial=initial, user=request.user)
+        form.fields['receipt_no'].widget.attrs['readonly'] = True  # Prevent manual edit
+
         customer_form = CustomerForm(customer_id=None)
-        if not is_admin_like:
-            form.fields['sales_date'].widget.attrs['readonly'] = True
         formset = RetailSalesDetailFormSet(queryset=RetailSalesDetails.objects.none())
 
-    return render(request, "retail_sales_add.html", {
-        'form': form, 'formset': formset,
-        'customer_form': customer_form, 'is_admin_like': is_admin_like
-    })
+        if not is_admin_like:
+            form.fields['sales_date'].widget.attrs['readonly'] = True
+
+    context = {
+        'form': form,
+        'formset': formset,
+        'customer_form': customer_form,
+        'is_admin_like': is_admin_like,
+        'selected_branch': selected_branch,
+    }
+    return render(request, "retail_sales_add.html", context)
 
 from django.db.models import Q
 from datetime import date
 
 @login_required
 def retail_sales_list(request):
-    is_admin_like = request.user.role in ['super_admin', 'admin', 'manager']
+    is_admin_like = request.user.role in ['super_admin', 'admin']
     
-    branch_id = request.GET.get('branch')  # string or None
+    branch_id = request.GET.get('branch')  # Can be "", "1", None
     from_date_str = request.GET.get('from_date')
     to_date_str = request.GET.get('to_date')
 
@@ -696,45 +766,53 @@ def retail_sales_list(request):
     from_date = from_date_str or today.strftime('%Y-%m-%d')
     to_date = to_date_str or today.strftime('%Y-%m-%d')
 
-    # Convert branch_id to int safely
-    selected_branch_id = None
-    if branch_id and branch_id.isdigit():
-        selected_branch_id = int(branch_id)
-    elif branch_id == '':  # Explicit "All Branches"
-        selected_branch_id = None
+    try:
+        from_date = datetime.strptime(from_date, '%Y-%m-%d').date()
+    except ValueError:
+        from_date = today
+    try:
+        to_date = datetime.strptime(to_date, '%Y-%m-%d').date()
+    except ValueError:
+        to_date = today
 
-    # Base query
+    selected_branch = None
+    if branch_id and branch_id.isdigit():
+        selected_branch = int(branch_id)
+
     sales = RetailSales.objects.filter(
         delete_status=False,
         sales_date__gte=from_date,
         sales_date__lte=to_date
     ).select_related('branch', 'customer', 'added_by')
 
-    # Apply filters
+    # Apply branch filter
     if not is_admin_like:
         sales = sales.filter(branch=request.user.branch)
-    elif selected_branch_id is not None:
-        sales = sales.filter(branch_id=selected_branch_id)
+        selected_branch_name = request.user.branch.branch_name
+    else:
+        if selected_branch is not None:
+            sales = sales.filter(branch_id=selected_branch)
+        selected_branch_name = "All Branches"
+        if selected_branch is not None:
+            try:
+                selected_branch_name = Branch.objects.get(branch_id=selected_branch).branch_name
+            except Branch.DoesNotExist:
+                pass
 
     sales = sales.order_by('-sales_date')
-
-    # === BRANCH NAME FOR SUMMARY ===
-    selected_branch_name = "All Branches"
-    if selected_branch_id is not None:
-        try:
-            selected_branch_name = Branch.objects.get(id=selected_branch_id).branch_name
-        except Branch.DoesNotExist:
-            selected_branch_name = "Unknown Branch"
-    elif not is_admin_like and request.user.branch:
-        selected_branch_name = request.user.branch.branch_name
 
     context = {
         'sales': sales,
         'branches': Branch.objects.all() if is_admin_like else [],
         'is_admin_like': is_admin_like,
-        'selected_branch': selected_branch_id,  # int or None
-        'from_date': from_date,
-        'to_date': to_date,
+        'selected_branch': selected_branch,  # int or None
+        # For <input type="date">
+        'from_date_str': request.GET.get('from_date', today.strftime('%Y-%m-%d')),
+        'to_date_str':   request.GET.get('to_date',   today.strftime('%Y-%m-%d')),
+
+        # For display with |date filter
+        'from_date': from_date,   # real date object
+        'to_date':   to_date,     # real date object
         'selected_branch_name': selected_branch_name,
         'today': today.strftime('%Y-%m-%d'),
     }
@@ -742,7 +820,7 @@ def retail_sales_list(request):
 
 @login_required
 def retail_sales_delete(request, pk):
-    if request.user.role not in ['super_admin', 'admin', 'manager']:
+    if request.user.role not in ['super_admin', 'admin']:
         return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
 
     sale = get_object_or_404(RetailSales, pk=pk, delete_status=False)
@@ -766,18 +844,32 @@ def retail_sales_delete(request, pk):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
 
-# views.py → wholesale_sales_list
 @login_required
 def wholesale_sales_list(request):
-    is_admin_like = request.user.role in ['super_admin', 'admin', 'manager']
+    is_admin_like = request.user.role in ['super_admin', 'admin']
     
-    branch_id = request.GET.get('branch')
+    branch_id_raw = request.GET.get('branch')        # "", "1", None
     from_date_str = request.GET.get('from_date')
-    to_date_str = request.GET.get('to_date')
+    to_date_str   = request.GET.get('to_date')
 
     today = date.today()
-    from_date = from_date_str or today.strftime('%Y-%m-%d')
-    to_date = to_date_str or today.strftime('%Y-%m-%d')
+
+    from_date_display = from_date_str or today.strftime('%Y-%m-%d')
+    to_date_display   = to_date_str   or today.strftime('%Y-%m-%d')
+
+    try:
+        from_date = datetime.strptime(from_date_display, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        from_date = today
+
+    try:
+        to_date = datetime.strptime(to_date_display, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        to_date = today
+
+    selected_branch = None
+    if branch_id_raw and branch_id_raw.isdigit():
+        selected_branch = int(branch_id_raw)
 
     sales = WholesaleSales.objects.filter(
         delete_status=False,
@@ -785,38 +877,41 @@ def wholesale_sales_list(request):
         sales_date__lte=to_date
     ).select_related('branch', 'customer', 'added_by')
 
+    sales = sales.annotate(balance=F('grand_total') - F('paid_amount'))
+
     if not is_admin_like:
         sales = sales.filter(branch=request.user.branch)
+        selected_branch_name = request.user.branch.branch_name
     else:
-        if branch_id:
-            sales = sales.filter(branch_id=branch_id)
+        if selected_branch is not None:
+            sales = sales.filter(branch_id=selected_branch)
+        selected_branch_name = "All Branches"
+        if selected_branch is not None:
+            try:
+                selected_branch_name = Branch.objects.get(branch_id=selected_branch).branch_name
+            except Branch.DoesNotExist:
+                selected_branch_name = "Unknown Branch"
 
     sales = sales.order_by('-sales_date')
 
-    selected_branch_name = ""
-    if branch_id:
-        try:
-            selected_branch_name = Branch.objects.get(id=branch_id).branch_name
-        except:
-            pass
-    elif not is_admin_like and request.user.branch:
-        selected_branch_name = request.user.branch.branch_name
-
+    # Context — exactly like retail
     context = {
         'sales': sales,
-        'branches': Branch.objects.all() if is_admin_like else None,
+        'branches': Branch.objects.all() if is_admin_like else [],
         'is_admin_like': is_admin_like,
-        'selected_branch': branch_id,
-        'from_date': from_date,
-        'to_date': to_date,
+        'selected_branch': selected_branch,           # int or None
+        'from_date_str': from_date_display,           # for <input>
+        'to_date_str': to_date_display,               # for <input>
+        'from_date': from_date,                       # real date → for |date filter
+        'to_date': to_date,                           # real date → for |date filter
         'selected_branch_name': selected_branch_name,
-        'today': today,
+        'today': today.strftime('%Y-%m-%d'),
     }
     return render(request, 'wholesale_sales_list.html', context)
 
 @login_required
 def wholesale_sales_add(request):
-    is_admin_like = request.user.role in ['super_admin', 'admin', 'manager']
+    is_admin_like = request.user.role in ['super_admin', 'admin']
     if request.method == "POST":
         # === GET customer_id from hidden field ===
         customer_id = request.POST.get('customer_id')
@@ -884,7 +979,7 @@ def wholesale_sales_add(request):
                         item.save()
 
                 messages.success(request, f"Wholesale sale {receipt_no} saved successfully!")
-                return redirect("dashboard")
+                return redirect("wholesale_receipt")
 
         else:
             logger.error("Wholesale Form errors: %s", form.errors)
@@ -939,17 +1034,7 @@ def wholesale_sales_delete(request, pk):
 
     return JsonResponse({'success': True})
 
-def generate_next_receipt():
-    last = RetailSales.objects.order_by('-id').first()
-    if last:
-        try:
-            prefix, num_str = last.receipt_no.rsplit('-', 1)
-            if prefix == 'RS':
-                num = int(num_str) + 1
-                return f'RS-{num:04d}'
-        except ValueError:
-            pass
-    return 'RS-0001'
+
 
 @require_GET
 def search_items(request):
@@ -961,6 +1046,7 @@ def search_items(request):
             'name': item.name,
             'code': item.code,
             'price': str(item.price_per_unit_retail),
+            'wholesale_price': str(item.price_per_unit_wholesale),
             'is_weight_based': item.category.is_weight_based
         } for item in items
     ]
@@ -975,6 +1061,7 @@ def item_by_code(request):
             'id': item.id,
             'name': item.name,
             'price': str(item.price_per_unit_retail),
+            'wholesale_price': str(item.price_per_unit_wholesale),
             'is_weight_based': item.category.is_weight_based
         }
         return JsonResponse(data)
@@ -1027,7 +1114,7 @@ from django.forms import inlineformset_factory
 
 @login_required
 def attendance_view(request):
-    if request.user.role not in ['admin', 'manager', 'super_admin']:
+    if request.user.role not in ['admin', 'super_admin']:
         messages.error(request, "You are not authorized.")
         return redirect('dashboard')
 
