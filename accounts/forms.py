@@ -419,9 +419,19 @@ class RetailSalesForm(forms.ModelForm):
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
-        if user and user.role == 'staff' and user.branch:
-            self.fields['branch'].initial = user.branch
+
+        if user and user.role in ['staff', 'manager'] and user.branch:
+            branch_pk = user.branch.pk
+            self.initial['branch'] = branch_pk
+            self.fields['branch'].queryset = Branch.objects.filter(pk=branch_pk)
             self.fields['branch'].widget = forms.HiddenInput()
+
+            if self.data:  # We are in POST
+                self.data = self.data.copy()  # Make mutable
+                self.data['branch'] = str(branch_pk)  # Must be string!
+
+            if self.instance.pk and not self.instance.branch_id:
+                self.instance.branch_id = branch_pk
 
     def clean_branch(self):
         branch = self.cleaned_data.get('branch')
@@ -504,9 +514,25 @@ class WholesaleSalesForm(forms.ModelForm):
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
-        if user and user.role == 'staff' and user.branch:
-            self.fields['branch'].initial = user.branch
+
+        if user and user.role in ['staff', 'manager'] and user.branch:
+            branch_pk = user.branch.pk
+
+            # 1. Set initial + restrict queryset
+            self.initial['branch'] = branch_pk
+            self.fields['branch'].queryset = Branch.objects.filter(pk=branch_pk)
+
+            # 2. Make it hidden
             self.fields['branch'].widget = forms.HiddenInput()
+
+            # 3. CRITICAL: Force the value into POST data so Django sees it
+            if self.data:  # We are in POST
+                self.data = self.data.copy()  # Make mutable
+                self.data['branch'] = str(branch_pk)  # Must be string!
+
+            # Optional: Also set on instance if editing (rare case)
+            if self.instance.pk and not self.instance.branch_id:
+                self.instance.branch_id = branch_pk
 
     def clean_branch(self):
         branch = self.cleaned_data.get('branch')

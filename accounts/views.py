@@ -979,7 +979,7 @@ def wholesale_sales_add(request):
                         item.save()
 
                 messages.success(request, f"Wholesale sale {receipt_no} saved successfully!")
-                return redirect("wholesale_receipt")
+                return redirect("wholesale_sales_add")
 
         else:
             logger.error("Wholesale Form errors: %s", form.errors)

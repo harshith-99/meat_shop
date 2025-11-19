@@ -30,17 +30,16 @@
                     {{ form.branch.label_tag }}
                     <span class="text-danger">{{ form.branch.errors|join:", " }}</span>
 
-                    {% if is_admin_like %}
-                        <!-- Admin can select branch -->
-                        {{ form.branch }}
-                    {% else %}
-                        <!-- Staff/Manager: Show only their branch (read-only) -->
-                        <div class="form-control" style="background-color: #f8f9fa; font-weight: bold; height: 38px; padding: 8px 12px; color: #495057;">
+                    {% if not is_admin_like %}
+                        <!-- Staff/Manager: show branch name + let Django render the hidden field -->
+                        <div class="form-control bg-light font-weight-bold"
+                            style="height: 38px; line-height: 28px; color: #495057;">
                             {{ request.user.branch.branch_name }} ({{ request.user.branch.alias|default:"--" }})
                         </div>
-                        <!-- Hidden input to submit correct branch ID -->
-                        <input type="hidden" name="branch" value="{{ request.user.branch.id }}">
                     {% endif %}
+
+                    <!-- ALWAYS render the Django field — it will be hidden with correct value -->
+                    {{ form.branch }}
                 </div>
             </div>
         </div>
