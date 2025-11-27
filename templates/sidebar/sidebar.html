@@ -70,7 +70,7 @@
                         <a class="collapse-item" href="{% url 'purchase_add' %}">Purchase Entry</a>
                         <a class="collapse-item" href="{% url 'purchase_list' %}">Purchase Details</a>
                         <a class="collapse-item" href="{% url 'supplier_list' %}">Supplier</a>
-                        {% if request.user.role == 'admin' or request.user.role == 'super_admin' %}
+                        {% if request.user.role == 'admin' or request.user.role == 'super_admin' or request.user.role == 'manager'%}
                         
                         <a class="collapse-item" href="{% url 'supplier_pay' %}">Supplier Payment</a>
                         <a class="collapse-item" href="{% url 'supplier_payment_list' %}">Supplier Payment List</a>
@@ -152,27 +152,7 @@
              
 
             
-            
-
-
-
-
-
-
-
-
-
-            <!-- Sidebar Toggler (Sidebar) -->
-            <!-- <div class="text-center d-none d-md-inline">
-                <button class="rounded-circle border-0" id="sidebarToggle"></button>
-            </div> -->
-
-            <!-- Sidebar Message -->
-            <!-- <div class="sidebar-card d-none d-lg-flex">
-                <img class="sidebar-card-illustration mb-2" src="img/undraw_rocket.svg" alt="...">
-                <p class="text-center mb-2"><strong>SB Admin Pro</strong> is packed with premium features, components, and more!</p>
-                <a class="btn btn-success btn-sm" href="https://startbootstrap.com/theme/sb-admin-pro">Upgrade to Pro!</a>
-            </div> -->
+        
 
         </ul>
         <!-- End of Sidebar -->
@@ -191,6 +171,11 @@
                         <i class="fa fa-bars"></i>
                     </button>
 
+                    {% if request.user.branch %}
+                    <h5 class="m-0 font-weight-bold text-primary d-none d-sm-block ml-3">
+                        <i class="fas fa-store-alt"></i> {{ request.user.branch.branch_name }}
+                    </h5>
+                    {% endif %}
                     <!-- Topbar Navbar -->
                     <ul class="navbar-nav ml-auto">
 
@@ -222,7 +207,6 @@
                         <li class="nav-item dropdown no-arrow mx-1">
                             <a class="nav-link dropdown-toggle" href="#" id="alertsDropdown" role="button"
                                 data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ branch_name|default:"No Branch" }}</span>
                             </a>
                         </li>
 
@@ -232,7 +216,18 @@
                         <li class="nav-item dropdown no-arrow">
                             <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
                                 data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ user.first_name }} {{ user.last_name }}</span>
+                            <span class="mr-2 d-none d-lg-inline text-gray-800">
+                                <strong>{{ request.user.get_full_name|default:request.user.username }}</strong><br>
+                                <small class="text-success font-weight-bold">
+                                    {% if request.user.role == 'super_admin' %}Super Admin
+                                    {% elif request.user.role == 'admin' %}Admin
+                                    {% elif request.user.role == 'manager' %}Manager
+                                    {% elif request.user.role == 'staff' %}Staff{% endif %}
+                                </small>
+                                {% if request.user.branch %}
+                                <br><small class="text-primary"><i class="fas fa-map-marker-alt"></i> {{ request.user.branch.branch_name }}</small>
+                                {% endif %}
+                            </span>
                                 <img class="img-profile rounded-circle"
                                     src="{%static 'img/undraw_profile.svg' %}">
                             </a>

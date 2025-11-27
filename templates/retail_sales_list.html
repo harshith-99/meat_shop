@@ -71,8 +71,8 @@
                             <th>Total</th>
                             {% if is_admin_like %}
                             <th>Created By</th>
-                            <th>Action</th>
                             {% endif %}
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -83,19 +83,22 @@
                             <td>{{ s.branch.branch_name }}</td>
                             <td>{{ s.customer.customer_name|default:"Walk-in" }}</td>
                             <td class="text-end">₹{{ s.grand_total|floatformat:2|intcomma }}</td>
-                            {% if is_admin_like %}
-                            <td>{{ s.added_by.get_full_name|default:s.added_by.username }}</td>
+                             {% if is_admin_like %}
+                                <td>{{ s.added_by.get_full_name|default:s.added_by.username }}</td>
+                            {% endif %}
                             <td>
                                 <a href="{% url 'retail_receipt' s.pk %}" target="_blank" class="btn btn-info btn-sm">
                                     Print
                                 </a>
-                                <button type="button"
-                                        onclick="deleteSale('{{ s.pk }}')"
-                                        class="btn btn-danger btn-sm">
-                                    Delete
-                                </button>
+                                {% if is_admin_like %}
+                                    <button type="button"
+                                            onclick="deleteSale('{{ s.pk }}')"
+                                            class="btn btn-danger btn-sm">
+                                        Delete
+                                    </button>
+                                 {% endif %}
                             </td>
-                            {% endif %}
+                           
                         </tr>
                         {% empty %}
                         <tr>

@@ -56,6 +56,7 @@ urlpatterns = [
     path('sales/wholesale/list/', views.wholesale_sales_list, name='wholesale_sales_list'),
     path('sales/wholesale/receipt/<int:pk>/', views.wholesale_receipt, name='wholesale_receipt'),
     path('sales/wholesale/delete/<int:pk>/', views.wholesale_sales_delete, name='wholesale_sales_delete'),
+    path('api/check_receipt/', views.check_receipt, name='check_receipt'),
 
     # Employe URLs
     path('employe/add/', views.employe_add, name='employe_add'),

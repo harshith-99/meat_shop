@@ -73,33 +73,37 @@
             </div>
         </div>
 
-        <!-- Customer Details -->
         <div class="card shadow mb-4">
             <div class="card-header py-3">
-                <h6 class="m-0 font-weight-bold text-primary">Customer Details (Optional)</h6>
+                <h6 class="m-0 font-weight-bold text-primary">
+                    Customer Details 
+                    <span id="customerRequiredMsg" style="display:none; color:red; font-size:0.9em;">
+                        (Required for Take-Away)
+                    </span>
+                </h6>
             </div>
             <div class="row p-3">
                 <div class="col-md-3">
                     {{ customer_form.customer_name.label_tag }}
-                    <span class="text-danger">{{ customer_form.customer_name.errors|join:", " }}</span>
                     {{ customer_form.customer_name }}
+                    <span class="text-danger">{{ customer_form.customer_name.errors|join:", " }}</span>
                 </div>
                 <div class="col-md-3">
                     {{ customer_form.customer_phone.label_tag }}
-                    <span class="text-danger">{{ customer_form.customer_phone.errors|join:", " }}</span>
                     {{ customer_form.customer_phone }}
+                    <span class="text-danger">{{ customer_form.customer_phone.errors|join:", " }}</span>
                 </div>
                 <div class="col-md-3">
                     {{ customer_form.customer_address.label_tag }}
-                    <span class="text-danger">{{ customer_form.customer_address.errors|join:", " }}</span>
                     {{ customer_form.customer_address }}
+                    <span class="text-danger">{{ customer_form.customer_address.errors|join:", " }}</span>
                 </div>
                 <div class="col-md-3">
                     {{ customer_form.gstin.label_tag }}
-                    <span class="text-danger">{{ customer_form.gstin.errors|join:", " }}</span>
                     {{ customer_form.gstin }}
+                    <span class="text-danger">{{ customer_form.gstin.errors|join:", " }}</span>
                 </div>
-                <input type="hidden" name="customer_id" id="customer_id">
+                <input type="hidden" name="customer_id" id="customer_id" value="">
             </div>
         </div>
 
@@ -282,25 +286,31 @@ document.addEventListener("DOMContentLoaded", function() {
     updateTotalsAndFields();
 
     // Customer Autocomplete
-    $("#id_customer_name, #id_customer_phone").autocomplete({
-        source: function(request, response) {
-            const field = this.element.attr('id') === 'id_customer_phone' ? 'phone' : 'name';
-            $.get('/accounts/api/search_customers/', {type: field, q: request.term}, function(data) {
-                response(data.map(c => ({
-                    label: field === 'phone' ? `${c.phone} (${c.name})` : `${c.name} (${c.phone})`,
-                    value: field === 'phone' ? c.phone : c.name,
-                    customer: c
-                })));
-            });
-        },
-        select: function(event, ui) {
-            const c = ui.item.customer;
-            $("#customer_id").val(c.id);
-            $("#id_customer_name").val(c.name);
-            $("#id_customer_phone").val(c.phone);
-            $("#id_customer_address").val(c.address);
-            $("#id_gstin").val(c.gstin);
-        }
+    $(document).on('focus', '#id_customer_name, #id_customer_phone', function() {
+        if ($(this).data("ui-autocomplete")) return;
+
+        $(this).autocomplete({
+            source: function(request, response) {
+                const field = this.element.attr('id').includes('phone') ? 'phone' : 'name';
+                $.get('/accounts/api/search_customers/', {type: field, q: request.term}, function(data) {
+                    response(data.map(c => ({
+                        label: field === 'phone' ? `${c.phone} - ${c.name}` : `${c.name} - ${c.phone}`,
+                        value: field === 'phone' ? c.phone : c.name,
+                        customer: c
+                    })));
+                });
+            },
+            minLength: 1,
+            select: function(event, ui) {
+                const c = ui.item.customer;
+                $('#customer_id').val(c.id);
+                $('#id_customer_name').val(c.name);
+                $('#id_customer_phone').val(c.phone);
+                $('#id_customer_address').val(c.address || '');
+                $('#id_gstin').val(c.gstin || '');
+                return false;
+            }
+        });
     });
 
     // Item Search
@@ -383,5 +393,19 @@ document.addEventListener("DOMContentLoaded", function() {
         updateTotalsAndFields();
     });
 });
+
+// Show warning when take-away is selected
+$('#id_take_amay_employee').change(function() {
+    if ($(this).val()) {
+        $('#customerRequiredMsg').show();
+        // Make fields look required
+        $('#id_customer_name, #id_customer_phone, #id_customer_address')
+            .addClass('border-danger').attr('required', true);
+    } else {
+        $('#customerRequiredMsg').hide();
+        $('#id_customer_name, #id_customer_phone, #id_customer_address')
+            .removeClass('border-danger').removeAttr('required');
+    }
+}).trigger('change');
 </script>
 {% endblock %}

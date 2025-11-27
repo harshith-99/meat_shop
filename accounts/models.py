@@ -51,6 +51,7 @@ class Supplierpay(models.Model):
     )
     description = models.TextField(blank=True, null=True)
     delete_status = models.BooleanField(default=False)
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, null=True, blank=True)
 
 class ItemCategory(models.Model):
     category_id = models.AutoField(primary_key=True)

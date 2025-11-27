@@ -3,6 +3,7 @@ from .models import CustomUser,Branch, Purchase, PurchaseDetail, Supplier, ItemC
 from django.forms import modelformset_factory
 from django.forms import inlineformset_factory
 from django.core.exceptions import ValidationError
+from decimal import Decimal
 
 
 class EmployeeLoginForm(forms.ModelForm):
@@ -104,25 +105,66 @@ class SupplierpayForm(forms.ModelForm):
         required=True
     )
     amount = forms.DecimalField(
-        widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
-        required=True
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off', 'step': '0.01'}),
+        required=True,
+        min_value=Decimal('0.01')
     )
     payment_mode = forms.ChoiceField(
-        choices=(('cash', 'Cash'), ('online', 'Online')),
-        widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'})
+        choices=(('cash', 'Cash'), ('online', 'Online'), ('cheque', 'Cheque'), ('upi', 'UPI')),
+        widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+        required=True
     )
     description = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={
             'class': 'form-control',
             'placeholder': 'Description (optional)',
-            'rows': 3
+            'rows': 3,
+            'autocomplete': 'off'
         })
+    )
+    branch = forms.ModelChoiceField(
+        queryset=Branch.objects.all(),
+        widget=forms.HiddenInput(),  # Will be auto-set
+        required=False
     )
 
     class Meta:
         model = Supplierpay
-        fields = ['supplier', 'payment_date', 'amount', 'payment_mode', 'description']
+        fields = ['supplier', 'payment_date', 'amount', 'payment_mode', 'description', 'branch']
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+        # Auto-fill & restrict branch for non-admin users
+        if user and user.role in ['staff', 'manager'] and user.branch:
+            self.fields['branch'].initial = user.branch
+            self.fields['branch'].widget = forms.HiddenInput()
+
+            # Force branch value even on validation error
+            if self.data:
+                mutable_data = self.data.copy()
+                mutable_data[f'{self.prefix}-branch' if self.prefix else 'branch'] = str(user.branch.id)
+                self.data = mutable_data
+
+        # Admin can choose any branch
+        elif user and user.role in ['admin', 'super_admin']:
+            self.fields['branch'].widget = forms.Select(attrs={'class': 'form-control'})
+            self.fields['branch'].required = True
+            self.fields['branch'].empty_label = "-- Select Branch --"
+        else:
+            self.fields['branch'].widget = forms.HiddenInput()
+
+        # Optional: Restrict suppliers to those who supplied to user's branch (for staff/manager)
+        if user and user.role in ['staff', 'manager'] and user.branch:
+            allowed_suppliers = Purchase.objects.filter(
+                branch=user.branch,
+                delete_status=False
+            ).values_list('supplier_id', flat=True).distinct()
+            self.fields['supplier'].queryset = Supplier.objects.filter(id__in=allowed_suppliers)
+        else:
+            self.fields['supplier'].queryset = Supplier.objects.all()
 
 
 class BranchForm(forms.ModelForm):
@@ -231,6 +273,30 @@ class ItemForm(forms.ModelForm):
     class Meta:
         model = Item
         fields = ['name', 'code', 'category', 'price_per_unit_retail', 'price_per_unit_wholesale', 'unit', 'stock']
+    
+    # forms.py (Add this in ItemForm __init__)
+
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)  # Get current user
+        super().__init__(*args, **kwargs)
+
+        # ONLY MANAGER: Allow editing Retail & Wholesale prices → Everything else readonly
+        if user and user.role == 'manager':
+            # Fields Manager CANNOT edit
+            readonly_fields = ['name', 'code', 'category', 'unit', 'stock']
+            for field_name in readonly_fields:
+                self.fields[field_name].widget.attrs['readonly'] = True
+                self.fields[field_name].disabled = True  # Fully disable (recommended)
+
+            # Allow only these two price fields
+            self.fields['price_per_unit_retail'].widget.attrs.update({
+                'class': 'form-control border-success',
+                'placeholder': 'Retail Price (Editable by Manager)'
+            })
+            self.fields['price_per_unit_wholesale'].widget.attrs.update({
+                'class': 'form-control border-success',
+                'placeholder': 'Wholesale Price (Editable by Manager)'
+            })
 
 class PurchaseForm(forms.ModelForm):
     class Meta:
@@ -264,9 +330,20 @@ class PurchaseForm(forms.ModelForm):
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
-        if user and user.role == 'staff' and user.branch:
-            self.fields['branch'].initial = user.branch
+
+        if user and user.role in ['staff', 'manager'] and user.branch:
+            # 1. Set initial value
+            self.initial['branch'] = user.branch.branch_id  # ← Use .id, not object
+
+            # 2. Make it hidden
             self.fields['branch'].widget = forms.HiddenInput()
+
+            # 3. CRITICAL: Force the value into POST data on validation error
+            if self.data:
+                # Make self.data mutable
+                mutable_data = self.data.copy()
+                mutable_data['branch'] = str(user.branch.branch_id)
+                self.data = mutable_data
 
     def clean_branch(self):
         branch = self.cleaned_data.get('branch')
@@ -295,7 +372,8 @@ class PurchaseDetailForm(forms.ModelForm):
     tax_percentage = forms.ChoiceField(
         choices=[('0', '0%'), ('12', '12%'), ('18', '18%')],
         widget=forms.Select(attrs={'class': 'form-control', 'style': 'width: fit-content;', 'autocomplete': 'off'}),
-        initial='0'
+        initial='0',
+        required=False
     )
     purchase_price = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'required': 'true', 'autocomplete': 'off'}))
     qty = forms.IntegerField(widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}))
@@ -333,52 +411,70 @@ PurchaseDetailFormSet = inlineformset_factory(
     Purchase, PurchaseDetail, form=PurchaseDetailForm, extra=1, can_delete=True
 )
 
-class CustomerForm(forms.ModelForm):
-    class Meta:
-        model = Customer
-        fields = ['customer_name', 'customer_phone', 'customer_address', 'gstin']
-
+# === FINAL CustomerForm — NO MORE ERRORS! ===
+class CustomerDataForm(forms.Form):
     customer_name = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Customer Name', 'autocomplete': 'off'})
+        max_length=100,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Customer Name',
+            'autocomplete': 'off'
+        })
     )
     customer_phone = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Phone Number', 'autocomplete': 'off'})
+        max_length=15,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Phone Number',
+            'autocomplete': 'off'
+        })
     )
     customer_address = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Address', 'autocomplete': 'off'})
+        max_length=200,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Address',
+            'autocomplete': 'off'
+        })
     )
     gstin = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'GSTIN', 'autocomplete': 'off'})
+        max_length=20,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'GSTIN',
+            'autocomplete': 'off'
+        })
     )
 
-    def __init__(self, *args, customer_id=None, **kwargs):
-        self.customer_id = customer_id
+    def __init__(self, *args, require_customer=False, **kwargs):
         super().__init__(*args, **kwargs)
+        self.require_customer = require_customer
+        if require_customer:
+            self.fields['customer_name'].required = True
+            self.fields['customer_phone'].required = True
+            self.fields['customer_address'].required = True
 
     def clean_customer_phone(self):
         phone = self.cleaned_data.get('customer_phone', '').strip()
         if phone:
             if not phone.isdigit():
-                raise forms.ValidationError("Phone number must contain only digits.")
+                raise ValidationError("Phone number must contain only digits.")
             if len(phone) != 10:
-                raise forms.ValidationError("Phone number must be exactly 10 digits.")
+                raise ValidationError("Phone number must be exactly 10 digits.")
         return phone
 
     def clean(self):
         cleaned_data = super().clean()
-        phone = cleaned_data.get('customer_phone', '').strip()
-        gstin = cleaned_data.get('gstin', '').strip()
-
-        # ONLY validate uniqueness if creating new (no customer_id)
-        if not self.customer_id:
-            if phone and Customer.objects.filter(customer_phone=phone).exists():
-                self.add_error('customer_phone', "A customer with this phone number already exists.")
-            if gstin and Customer.objects.filter(gstin=gstin).exists():
-                self.add_error('gstin', "A customer with this GSTIN already exists.")
+        if self.require_customer:
+            name = cleaned_data.get('customer_name', '').strip()
+            phone = cleaned_data.get('customer_phone', '').strip()
+            address = cleaned_data.get('customer_address', '').strip()
+            if not (name and phone and address):
+                raise ValidationError("All customer fields are required for Take-Away.")
         return cleaned_data
 
 class RetailSalesForm(forms.ModelForm):

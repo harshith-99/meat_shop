@@ -7,7 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.db import transaction
 from decimal import Decimal, InvalidOperation
-from .forms import EmployeeLoginForm,PurchaseForm, PurchaseDetailFormSet, ItemCategoryForm, BranchForm, SupplierForm, ItemForm, RetailSalesForm, RetailSalesDetailFormSet, CustomerForm, WholesaleSalesForm, WholesaleSalesDetailFormSet,SupplierpayForm,EmployeForm,AttendanceInlineForm
+from .forms import EmployeeLoginForm,PurchaseForm, PurchaseDetailFormSet, ItemCategoryForm, BranchForm, SupplierForm, ItemForm, RetailSalesForm, RetailSalesDetailFormSet, CustomerDataForm, WholesaleSalesForm, WholesaleSalesDetailFormSet,SupplierpayForm,EmployeForm,AttendanceInlineForm
 from .models import Purchase, PurchaseDetail, Branch, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance
 import logging
 from django.http import JsonResponse
@@ -15,6 +15,8 @@ from django.views.decorators.http import require_GET
 from django.http import HttpRequest
 from datetime import datetime, date
 from django.contrib.auth.hashers import make_password
+from django.db import models
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -91,76 +93,122 @@ def supplier_add(request):
 @login_required
 def supplier_pay(request):
     if request.method == "POST":
-        form = SupplierpayForm(request.POST)
+        form = SupplierpayForm(request.POST, user=request.user)
         if form.is_valid():
-            form.save()
-            messages.success(request, "Payment recorded successfully!")
-            return redirect("supplier_pay")
-        else:
-            messages.error(request, "Please correct the errors below.")
+            payment = form.save(commit=False)
+            # Ensure branch is always saved
+            if not payment.branch and request.user.branch:
+                payment.branch = request.user.branch
+            payment.save()
+            messages.success(request, f"Payment of ₹{payment.amount} to {payment.supplier} recorded!")
+            return redirect('supplier_payment_list')
     else:
-        form = SupplierpayForm()
+        form = SupplierpayForm(user=request.user)
 
     return render(request, "supplier_pay.html", {"form": form})
 
 @login_required
 def supplier_payment_list(request):
-    is_manager = request.user.role in ['admin', 'super_admin']
+    user = request.user
+    is_manager = user.role == 'manager'
+    is_staff = user.role == 'staff'
+    is_admin_like = user.role in ['admin', 'super_admin']
 
     supplier_id = request.GET.get('supplier')
-    from_date = request.GET.get('from_date')
-    to_date = request.GET.get('to_date')
+    from_date_str = request.GET.get('from_date')
+    to_date_str = request.GET.get('to_date')
 
-    payments = Supplierpay.objects.filter(delete_status=False)
+    # === PAYMENTS LIST ===
+    payments = Supplierpay.objects.filter(delete_status=False).select_related('supplier', 'branch')
 
-    if supplier_id:
-        payments = payments.filter(supplier_id=supplier_id)  # OK: FK on Supplierpay
-
-    if from_date:
+    if from_date_str:
         try:
-            from_date = datetime.strptime(from_date, '%Y-%m-%d').date()
+            from_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
             payments = payments.filter(payment_date__gte=from_date)
         except ValueError:
             pass
-
-    if to_date:
+    if to_date_str:
         try:
-            to_date = datetime.strptime(to_date, '%Y-%m-%d').date()
+            to_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
             payments = payments.filter(payment_date__lte=to_date)
         except ValueError:
             pass
+    if supplier_id:
+        payments = payments.filter(supplier_id=supplier_id)
 
-    payments = payments.select_related('supplier').order_by('-payment_date')
+    # Branch restriction for manager/staff
+    if is_manager or is_staff:
+        if not user.branch:
+            messages.error(request, "You are not assigned to any branch.")
+            payments = payments.none()
+        else:
+            payments = payments.filter(branch=user.branch)
 
-    # --- CORRECTED: Use 'supplier_id' instead of 'id' ---
-    supplier_stats = Supplier.objects.annotate(
+    payments = payments.order_by('-payment_date')
+
+    # === SUPPLIER BALANCE CALCULATION ===
+    stats = Supplier.objects.all()
+
+    # Base filters
+    purchase_q = Q(purchase__delete_status=False)
+    payment_q = Q(supplierpay__delete_status=False)
+
+    # Apply branch filter if needed
+    if is_manager or is_staff and user.branch:
+        purchase_q &= Q(purchase__branch=user.branch)
+        payment_q &= Q(supplierpay__branch=user.branch)
+
+    # Apply supplier filter BEFORE annotate (safe)
+    if supplier_id:
+        stats = stats.filter(supplier_id=supplier_id)  # Use supplier_id, not id!
+
+    supplier_stats = stats.annotate(
         total_purchase=Sum(
             'purchase__details__total_amount',
-            filter=Q(purchase__delete_status=False)
+            filter=purchase_q,
+            output_field=models.DecimalField(max_digits=12, decimal_places=2)
         ),
         total_paid=Sum(
             'supplierpay__amount',
-            filter=Q(supplierpay__delete_status=False),
-            distinct=True
+            filter=payment_q,
+            output_field=models.DecimalField(max_digits=12, decimal_places=2)
         )
     ).annotate(
         balance=F('total_purchase') - F('total_paid')
     ).values(
-        'supplier_id', 'supplier_name',  # Changed 'id' → 'supplier_id'
-        'total_purchase', 'total_paid', 'balance'
+        'supplier_id', 'supplier_name', 'total_purchase', 'total_paid', 'balance'
     )
 
-    if supplier_id:
-        supplier_stats = supplier_stats.filter(supplier_id=supplier_id)  # Use supplier_id
+    # Clean None → 0.00
+    supplier_stats = [
+        {
+            'supplier_id': s['supplier_id'],
+            'supplier_name': s['supplier_name'],
+            'total_purchase': s['total_purchase'] or Decimal('0.00'),
+            'total_paid': s['total_paid'] or Decimal('0.00'),
+            'balance': (s['total_purchase'] or Decimal('0.00')) - (s['total_paid'] or Decimal('0.00'))
+        }
+        for s in supplier_stats
+    ]
+
+    # Suppliers for dropdown
+    if is_manager_or_staff := (is_manager or is_staff):
+        suppliers = Supplier.objects.filter(
+            purchase__branch=user.branch,
+            purchase__delete_status=False
+        ).distinct()
+    else:
+        suppliers = Supplier.objects.all()
 
     context = {
         'payments': payments,
-        'suppliers': Supplier.objects.all(),
+        'suppliers': suppliers,
         'selected_supplier': supplier_id,
-        'from_date': request.GET.get('from_date'),  # Keep as string
-        'to_date': request.GET.get('to_date'),
-        'supplier_stats': list(supplier_stats),
-        'is_manager': is_manager,
+        'from_date': from_date_str,
+        'to_date': to_date_str,
+        'supplier_stats': supplier_stats,
+        'is_manager': is_manager_or_staff,
+        'is_admin_like': is_admin_like,
     }
     return render(request, 'supplier_payment_list.html', context)
 
@@ -338,22 +386,23 @@ def item_list(request):
     items = Item.objects.all()
     return render(request, "item_list.html", {"items": items})
 
+
 @login_required
 def item_update(request, pk):
     item = get_object_or_404(Item, pk=pk)
+    
     if request.method == "POST":
-        form = ItemForm(request.POST, instance=item)
+        form = ItemForm(request.POST, instance=item, user=request.user)  # ← PASS USER
         if form.is_valid():
             form.save()
-            messages.success(request, "Item updated successfully!")
+            messages.success(request, "Item prices updated successfully!")
             return redirect('item_list')
-        else:
-            messages.error(request, "Please correct the errors.")
     else:
-        form = ItemForm(instance=item)
+        form = ItemForm(instance=item, user=request.user)  # ← PASS USER HERE TOO
+
     context = {
         'form': form,
-        'category': item
+        'item': item
     }
     return render(request, 'item_update.html', context)
 
@@ -544,37 +593,46 @@ def purchase_delete(request, pk):
     return redirect('purchase_list')
 
 def get_or_create_customer(data, customer_id=None):
+    phone = data.get('customer_phone', '').strip()
+    gstin = data.get('gstin', '').strip()
 
+    # 1. If we have customer_id → reuse it directly
     if customer_id:
         try:
             return Customer.objects.get(id=customer_id), False
         except Customer.DoesNotExist:
             pass
-    phone = data.get('customer_phone', '').strip()
-    gstin = data.get('gstin', '').strip()
-    name = data.get('customer_name', '').strip()
-    # Search by phone (most reliable)
+
+    # 2. Try to find by phone (priority)
     if phone:
         try:
-            return Customer.objects.get(customer_phone=phone), False
+            customer = Customer.objects.get(customer_phone=phone)
+            return customer, False  # REUSE!
         except Customer.DoesNotExist:
             pass
-    # Search by GSTIN
+
+    # 3. Try by GSTIN
     if gstin:
         try:
-            return Customer.objects.get(gstin=gstin), False
+            customer = Customer.objects.get(gstin=gstin)
+            return customer, False
         except Customer.DoesNotExist:
             pass
-    # Create new only if no match
-    if name or phone or gstin:
+
+    # 4. Only NOW create new (safe — no conflict)
+    if data.get('customer_name') or phone or gstin:
         return Customer.objects.create(
-            customer_name=name or '',
+            customer_name=data.get('customer_name', 'Customer') or 'Customer',
             customer_phone=phone or None,
             customer_address=data.get('customer_address', '') or '',
             gstin=gstin or None
         ), True
 
-    return None, False
+    # Fallback
+    return Customer.objects.get_or_create(
+        customer_name="Store Customer",
+        defaults={'customer_phone': None, 'customer_address': '', 'gstin': None}
+    )[0], False
 
 def generate_next_receipt(branch_alias):
 
@@ -644,15 +702,16 @@ def retail_sales_add(request):
 
     if request.method == "POST":
         customer_id = request.POST.get('customer_id')
+        take_away_emp_id = request.POST.get('take_amay_employee')
+        require_customer = bool(take_away_emp_id and take_away_emp_id != '')
+
         form = RetailSalesForm(request.POST, user=request.user)
         formset = RetailSalesDetailFormSet(request.POST)
-        customer_form = CustomerForm(request.POST, customer_id=customer_id)
-        customer_form.is_valid()
+        customer_form = CustomerDataForm(request.POST, require_customer=require_customer)
 
-        if form.is_valid() and formset.is_valid():
+        if form.is_valid() and formset.is_valid() and customer_form.is_valid():
             receipt_no = form.cleaned_data['receipt_no'].strip()
 
-            # Prevent duplicate receipt across all branches
             if RetailSales.objects.filter(receipt_no__iexact=receipt_no).exists():
                 messages.error(request, f"Receipt number '{receipt_no}' already exists!")
                 return render(request, "retail_sales_add.html", {
@@ -666,19 +725,21 @@ def retail_sales_add(request):
                 if not is_admin_like:
                     sales.branch = request.user.branch
 
-                # Customer logic
+                # === SAFE CUSTOMER HANDLING ===
                 customer_data = customer_form.cleaned_data
                 customer, created = get_or_create_customer(customer_data, customer_id)
-                if not customer:
-                    messages.error(request, "Customer must have a name or phone.")
-                    return render(request, "retail_sales_add.html", {
-                        'form': form, 'formset': formset,
-                        'customer_form': customer_form, 'is_admin_like': is_admin_like
-                    })
+
+                # Optional: Update existing customer if fields changed (safe)
+                if not created and any(customer_data.values()):
+                    for field, value in customer_data.items():
+                        if value:
+                            setattr(customer, field, value)
+                    customer.save()
+
                 sales.customer = customer
                 sales.save()
 
-                # Save items and deduct stock
+                # Save items & deduct stock
                 for detail in formset:
                     if detail.cleaned_data and not detail.cleaned_data.get('DELETE'):
                         detail_instance = detail.save(commit=False)
@@ -686,8 +747,8 @@ def retail_sales_add(request):
                         detail_instance.save()
 
                         item = detail.cleaned_data['item']
-                        qty = detail.cleaned_data['qty']
-                        net_weight = detail.cleaned_data['net_weight']
+                        qty = detail.cleaned_data['qty'] or 0
+                        net_weight = detail.cleaned_data['net_weight'] or 0
 
                         if item.category.is_weight_based:
                             if item.stock < net_weight:
@@ -701,29 +762,25 @@ def retail_sales_add(request):
                             item.stock -= qty
                         item.save()
 
-                messages.success(request, f"Retail sale {receipt_no} saved!")
+                messages.success(request, f"Retail sale {receipt_no} saved successfully!")
                 return redirect('retail_receipt', pk=sales.pk)
 
         else:
             messages.error(request, "Please correct the errors below.")
 
     else:
-        # === GET Request: Generate correct receipt number ===
+        # GET Request
         selected_branch = None
-
         if is_admin_like:
             branch_id = request.GET.get('branch')
             if branch_id:
-                try:
-                    selected_branch = Branch.objects.get(branch_id=branch_id)
-                except Branch.DoesNotExist:
-                    selected_branch = Branch.objects.first()
+                selected_branch = get_object_or_404(Branch, branch_id=branch_id)
             else:
                 selected_branch = Branch.objects.first()
         else:
-            selected_branch = request.user.branch  # Staff uses their branch
+            selected_branch = request.user.branch
 
-        receipt_no = generate_next_receipt(selected_branch.alias if selected_branch else None)
+        receipt_no = generate_next_receipt(selected_branch.alias if selected_branch else "XX")
 
         initial = {
             'receipt_no': receipt_no,
@@ -734,20 +791,16 @@ def retail_sales_add(request):
             initial['branch'] = selected_branch
 
         form = RetailSalesForm(initial=initial, user=request.user)
-        form.fields['receipt_no'].widget.attrs['readonly'] = True  # Prevent manual edit
+        form.fields['receipt_no'].widget.attrs['readonly'] = True
 
-        customer_form = CustomerForm(customer_id=None)
+        customer_form = CustomerDataForm(require_customer=False)
         formset = RetailSalesDetailFormSet(queryset=RetailSalesDetails.objects.none())
-
-        if not is_admin_like:
-            form.fields['sales_date'].widget.attrs['readonly'] = True
 
     context = {
         'form': form,
         'formset': formset,
         'customer_form': customer_form,
         'is_admin_like': is_admin_like,
-        'selected_branch': selected_branch,
     }
     return render(request, "retail_sales_add.html", context)
 
@@ -912,99 +965,102 @@ def wholesale_sales_list(request):
 @login_required
 def wholesale_sales_add(request):
     is_admin_like = request.user.role in ['super_admin', 'admin']
+
     if request.method == "POST":
-        # === GET customer_id from hidden field ===
         customer_id = request.POST.get('customer_id')
+
         form = WholesaleSalesForm(request.POST, user=request.user)
         formset = WholesaleSalesDetailFormSet(request.POST)
-        customer_form = CustomerForm(request.POST, customer_id=customer_id)
-        customer_form.is_valid()
+        customer_form = CustomerDataForm(request.POST, require_customer=True)  # Mandatory
 
-        if form.is_valid() and formset.is_valid():
-            receipt_no = form.cleaned_data['receipt_no'].strip()
+        if form.is_valid() and formset.is_valid() and customer_form.is_valid():
+            receipt_no = form.cleaned_data['receipt_no'].strip().upper()
 
-            # Case-insensitive duplicate check
+            # Unique receipt check
             if WholesaleSales.objects.filter(receipt_no__iexact=receipt_no).exists():
-                messages.error(request, f"Receipt number '{receipt_no}' already exists!")
+                messages.error(request, f"Receipt No '{receipt_no}' already used!")
                 return render(request, "wholesale_sales_add.html", {
-                    'form': form,
-                    'formset': formset,
-                    'customer_form': customer_form,
+                    'form': form, 'formset': formset, 'customer_form': customer_form,
                     'is_admin_like': is_admin_like
                 })
 
             with transaction.atomic():
+                # 1. First handle customer (MANDATORY)
+                customer_data = customer_form.cleaned_data
+                customer, created = get_or_create_customer(customer_data, customer_id)
+
+                # Update existing customer if fields changed
+                if not created:
+                    updated = False
+                    for field, value in customer_data.items():
+                        if value and getattr(customer, field, None) != value:
+                            setattr(customer, field, value)
+                            updated = True
+                    if updated:
+                        customer.save()
+
+                # 2. Now create the sale object BUT DO NOT SAVE YET
                 sales = form.save(commit=False)
                 sales.added_by = request.user
                 if not is_admin_like:
                     sales.branch = request.user.branch
 
-                # === REUSE OR CREATE CUSTOMER ===
-                customer_data = customer_form.cleaned_data
-                customer, created = get_or_create_customer(customer_data, customer_id)
-                if not customer:
-                    messages.error(request, "Customer must have a name or phone number.")
-                    return render(request, "wholesale_sales_add.html", {
-                        'form': form,
-                        'formset': formset,
-                        'customer_form': customer_form,
-                        'is_admin_like': is_admin_like
-                    })
+                # CRITICAL: Assign customer BEFORE saving!
                 sales.customer = customer
-                # ==================================
 
+                # Now it's safe to save
                 sales.save()
 
-                # Save details + update stock
-                for detail in formset:
-                    if detail.cleaned_data and not detail.cleaned_data.get('DELETE'):
-                        detail_instance = detail.save(commit=False)
-                        detail_instance.sales = sales
-                        detail_instance.save()
+                # 3. Save formset items
+                for detail_form in formset:
+                    if detail_form.cleaned_data and not detail_form.cleaned_data.get('DELETE', False):
+                        detail = detail_form.save(commit=False)
+                        detail.sales = sales
+                        detail.save()
 
-                        item = detail.cleaned_data['item']
-                        qty = detail.cleaned_data['qty']
-                        net_weight = detail.cleaned_data['net_weight']
+                        item = detail.item
+                        qty = detail.qty or 0
+                        net_weight = detail.net_weight or 0
 
                         if item.category.is_weight_based:
                             if item.stock < net_weight:
-                                messages.error(request, f"Not enough stock for {item.name} (Need: {net_weight} kg)")
-                                raise transaction.TransactionManagementError()
+                                messages.error(request, f"Low stock: {item.name} (Need {net_weight} kg)")
+                                raise ValueError("Low stock")
                             item.stock -= net_weight
                         else:
                             if item.stock < qty:
-                                messages.error(request, f"Not enough stock for {item.name} (Need: {qty})")
-                                raise transaction.TransactionManagementError()
+                                messages.error(request, f"Low stock: {item.name} (Need {qty})")
+                                raise ValueError("Low stock")
                             item.stock -= qty
                         item.save()
 
-                messages.success(request, f"Wholesale sale {receipt_no} saved successfully!")
-                return redirect("wholesale_sales_add")
+                messages.success(request, f"Wholesale Sale {receipt_no} created successfully!")
+                return redirect('wholesale_sales_add')
+                # return redirect('wholesale_sales_add', pk=sales.pk)
 
         else:
-            logger.error("Wholesale Form errors: %s", form.errors)
-            logger.error("Formset errors: %s", [f.errors for f in formset])
+            # Show form errors
             messages.error(request, "Please correct the errors below.")
 
     else:
+        # GET request
         initial = {
             'sales_date': date.today(),
             'payment_mode': 'pending',
-            'paid_amount': 0,
+            'paid_amount': '0.00',
         }
         if not is_admin_like and request.user.branch:
             initial['branch'] = request.user.branch
+
         form = WholesaleSalesForm(initial=initial, user=request.user)
-        customer_form = CustomerForm(customer_id=None)  # No ID on GET
-        if not is_admin_like:
-            form.fields['sales_date'].widget.attrs['readonly'] = True
         formset = WholesaleSalesDetailFormSet(queryset=WholesaleSalesDetails.objects.none())
+        customer_form = CustomerDataForm(require_customer=True)  # Always required
 
     return render(request, "wholesale_sales_add.html", {
         'form': form,
         'formset': formset,
         'customer_form': customer_form,
-        'is_admin_like': is_admin_like
+        'is_admin_like': is_admin_like,
     })
 
 @login_required
@@ -1229,3 +1285,15 @@ def attendance_view(request):
 
         messages.success(request, f"Attendance saved for {selected_date}")
         return redirect(request.path + f'?date={selected_date}&branch={branch_id}')
+    
+@require_GET
+def check_receipt(request):
+    receipt_no = request.GET.get('receipt_no', '').strip()
+    type_ = request.GET.get('type', 'retail')
+    
+    if type_ == 'wholesale':
+        exists = WholesaleSales.objects.filter(receipt_no__iexact=receipt_no).exists()
+    else:
+        exists = RetailSales.objects.filter(receipt_no__iexact=receipt_no).exists()
+    
+    return JsonResponse({'exists': exists})

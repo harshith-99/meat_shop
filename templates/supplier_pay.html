@@ -3,34 +3,95 @@
 
 {% block content %}
 <div class="container-fluid">
-    <h1 class="h3 mb-4 text-gray-800"> Supplier Pay</h1>
+    <h1 class="h3 mb-4 text-gray-800">Supplier Payment</h1>
+
     {% for message in messages %}
-    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="close" data-dismiss="alert">&times;</button>
+    </div>
     {% endfor %}
+
     <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Add Payment</h6>
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">Record Supplier Payment</h6>
+            <a href="{% url 'supplier_payment_list' %}" class="btn btn-info btn-sm">
+                View Payments
+            </a>
         </div>
         <div class="card-body">
             <form method="post">
                 {% csrf_token %}
 
-                {% for field in form %}
-                <div class="form-group col-md-6">
-                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                    {{ field }}  {# Already has Bootstrap class from form #}
+                <div class="row">
+                    <!-- SUPPLIER -->
+                    <div class="col-md-6 mb-3">
+                        {{ form.supplier.label_tag }}
+                        {{ form.supplier }}
+                        {% if form.supplier.errors %}
+                            <small class="text-danger">{{ form.supplier.errors|join:", " }}</small>
+                        {% endif %}
+                    </div>
 
-                    {% if field.errors %}
-                        <small class="text-danger">{{ field.errors }}</small>
+                    <!-- PAYMENT DATE -->
+                    <div class="col-md-6 mb-3">
+                        {{ form.payment_date.label_tag }}
+                        {{ form.payment_date }}
+                        {% if form.payment_date.errors %}
+                            <small class="text-danger">{{ form.payment_date.errors|join:", " }}</small>
+                        {% endif %}
+                    </div>
+
+                    <!-- AMOUNT -->
+                    <div class="col-md-6 mb-3">
+                        {{ form.amount.label_tag }}
+                        {{ form.amount }}
+                        {% if form.amount.errors %}
+                            <small class="text bü-danger">{{ form.amount.errors|join:", " }}</small>
+                        {% endif %}
+                    </div>
+
+                    <!-- PAYMENT MODE -->
+                    <div class="col-md-6 mb-3">
+                        {{ form.payment_mode.label_tag }}
+                        {{ form.payment_mode }}
+                        {% if form.payment_mode.errors %}
+                            <small class="text-danger">{{ form.payment_mode.errors|join:", " }}</small>
+                        {% endif %}
+                    </div>
+
+                    <!-- BRANCH – ONLY VISIBLE TO ADMIN / SUPER_ADMIN -->
+                    {% if user.role in 'admin,super_admin' %}
+                    <div class="col-md-6 mb-3">
+                        {{ form.branch.label_tag }}
+                        {{ form.branch }}
+                        {% if form.branch.errors %}
+                            <small class="text-danger">{{ form.branch.errors|join:", " }}</small>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <!-- Hidden field for Staff/Manager – auto-filled by backend -->
+                    {{ form.branch }}
                     {% endif %}
-                    {% if field.help_text %}
-                        <small class="form-text text-muted">{{ field.help_text }}</small>
-                    {% endif %}
+
+                    <!-- DESCRIPTION -->
+                    <div class="col-md-12 mb-3">
+                        {{ form.description.label_tag }}
+                        {{ form.description }}
+                        {% if form.description.errors %}
+                            <small class="text-danger">{{ form.description.errors|join:", " }}</small>
+                        {% endif %}
+                    </div>
                 </div>
-                {% endfor %}
 
-                <button type="submit" class="btn btn-primary">Save</button>
-                <a href="{% url 'supplier_pay' %}" class="btn btn-secondary">Cancel</a>
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-success btn-lg">
+                        Save Payment
+                    </button>
+                    <a href="{% url 'supplier_payment_list' %}" class="btn btn-secondary btn-lg ml-2">
+                        Cancel
+                    </a>
+                </div>
             </form>
         </div>
     </div>
