@@ -51,6 +51,8 @@ urlpatterns = [
     path('sales/retail/receipt/<int:pk>/', views.retail_receipt, name='retail_receipt'),
     path('sales/retail/delete/<int:pk>/', views.retail_sales_delete, name='retail_sales_delete'),
 
+    path('retail-item-report/', views.retail_item_report, name='retail_item_report'),
+
     # Wholesale Sales URLs
     path('wholesale-sales/add/', views.wholesale_sales_add, name='wholesale_sales_add'),
     path('sales/wholesale/list/', views.wholesale_sales_list, name='wholesale_sales_list'),

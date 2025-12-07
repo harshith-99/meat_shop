@@ -65,13 +65,14 @@
                             <th>Category</th>
                             <th>Item</th>
                             <th>Tax %</th>
-                            <th>Purchase Price</th>
+                            <th>P Price</th>
                             <th>Qty</th>
+                            <th>No Of Boxes</th>
                             <th>Gross Wt</th>
                             <th>Empty Wt</th>
                             <th>Net Wt</th>
                             <th>Total</th>
-                            <th>Remove</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -89,6 +90,8 @@
                                 {% elif field.name == "purchase_price" %}
                                     <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td>
                                 {% elif field.name == "qty" %}
+                                    <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td>
+                                {% elif field.name == "no_of_boxes" %}
                                     <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td>
                                 {% elif field.name == "gross_weight" %}
                                     <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td>

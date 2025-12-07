@@ -55,7 +55,8 @@ class SupplierForm(forms.ModelForm):
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Company', 'required': 'true', 'autocomplete': 'off'})
     )
     email = forms.EmailField(
-        widget=forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'Email', 'required': 'false', 'autocomplete': 'off'})
+        required=False,
+        widget=forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'Email', 'autocomplete': 'off'})
     )
     phone_no = forms.CharField(
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Contact Number', 'required': 'true', 'autocomplete': 'off'})
@@ -64,21 +65,13 @@ class SupplierForm(forms.ModelForm):
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Address', 'required': 'true', 'autocomplete': 'off'})
     )
     gstin = forms.CharField(
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'GST Number', 'required': 'true', 'autocomplete': 'off'})
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'GST Number', 'autocomplete': 'off'})
     )
 
     class Meta:
         model = Supplier
         fields = ['supplier_name', 'company_name', 'email', 'phone_no', 'address', 'gstin']
-
-    def clean_email(self):
-        email = self.cleaned_data.get('email')
-        qs = Supplier.objects.filter(email=email)
-        if self.instance.pk:
-            qs = qs.exclude(pk=self.instance.pk)
-        if qs.exists():
-            raise forms.ValidationError("This email is already registered.")
-        return email
 
     def clean_phone_no(self):
         phone_no = self.cleaned_data.get('phone_no')
@@ -98,7 +91,8 @@ class SupplierpayForm(forms.ModelForm):
     supplier = forms.ModelChoiceField(
         queryset=Supplier.objects.all(),
         widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'}),
-        required=True
+        required=True,
+        to_field_name='supplier_id',
     )
     payment_date = forms.DateField(
         widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control', 'autocomplete': 'off'}),
@@ -162,7 +156,7 @@ class SupplierpayForm(forms.ModelForm):
                 branch=user.branch,
                 delete_status=False
             ).values_list('supplier_id', flat=True).distinct()
-            self.fields['supplier'].queryset = Supplier.objects.filter(id__in=allowed_suppliers)
+            self.fields['supplier'].queryset = Supplier.objects.filter(supplier_id__in=allowed_suppliers)
         else:
             self.fields['supplier'].queryset = Supplier.objects.all()
 
@@ -355,11 +349,11 @@ class PurchaseDetailForm(forms.ModelForm):
     class Meta:
         model = PurchaseDetail
         fields = ['purchase_type', 'category', 'item', 'tax_percentage', 'purchase_price', 
-                  'qty', 'gross_weight', 'empty_weight', 'net_weight', 'total_amount']
+                  'qty', 'no_of_boxes','gross_weight', 'empty_weight', 'net_weight', 'total_amount']
 
     purchase_type = forms.ChoiceField(
         choices=[('retail', 'Retail'), ('wholesale', 'Wholesale')],
-        widget=forms.Select(attrs={'class': 'form-control', 'style': 'width: fit-content;', 'required': 'true', 'autocomplete': 'off'})
+        widget=forms.Select(attrs={'class': 'form-control', 'style': 'width: 90px;', 'required': 'true', 'autocomplete': 'off'})
     )
     category = forms.ModelChoiceField(
         queryset=ItemCategory.objects.all(),
@@ -371,12 +365,14 @@ class PurchaseDetailForm(forms.ModelForm):
     )
     tax_percentage = forms.ChoiceField(
         choices=[('0', '0%'), ('12', '12%'), ('18', '18%')],
-        widget=forms.Select(attrs={'class': 'form-control', 'style': 'width: fit-content;', 'autocomplete': 'off'}),
+        widget=forms.Select(attrs={'class': 'form-control', 'style': 'width: 40px;', 'autocomplete': 'off'}),
         initial='0',
         required=False
     )
+
     purchase_price = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'required': 'true', 'autocomplete': 'off'}))
     qty = forms.IntegerField(widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}))
+    no_of_boxes = forms.IntegerField(widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}))
     gross_weight = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}))
     empty_weight = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}))
     net_weight = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}))
@@ -502,7 +498,7 @@ class RetailSalesForm(forms.ModelForm):
         required=False
     )
     payment_mode = forms.ChoiceField(
-        choices=(('cash', 'Cash'), ('online', 'Online'), ('pending', 'Pending')),
+        choices=(('cash', 'Cash'), ('upi', 'UPI'),('cheque', 'Cheque'),('online', 'Online'), ('credit', 'Credit')),
         widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'})
     )
     take_amay_employee = forms.ModelChoiceField(
@@ -596,9 +592,9 @@ class WholesaleSalesForm(forms.ModelForm):
         required=False
     )
     payment_mode = forms.ChoiceField(
-        choices=(('pending', 'Pending'), ('cash', 'Cash'), ('online', 'Online')),
+        choices=(('credit', 'Credit'), ('cash', 'Cash'),('upi', 'UPI'),('cheque', 'Cheque'), ('online', 'Online')),
         widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'}),
-        initial='pending'
+        initial='credit'
     )
     paid_amount = forms.DecimalField(
         max_digits=12,
@@ -659,7 +655,7 @@ class WholesaleSalesDetailForm(forms.ModelForm):
         initial='0'
     )
     price_per_unit = forms.DecimalField(
-        widget=forms.NumberInput(attrs={'class': 'form-control', 'readonly': True, 'autocomplete': 'off'})
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'})
     )
     qty = forms.IntegerField(
         widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'})

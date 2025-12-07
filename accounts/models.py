@@ -102,6 +102,7 @@ class PurchaseDetail(models.Model):
     tax_percentage = models.DecimalField(max_digits=5, decimal_places=2)
     purchase_price = models.DecimalField(max_digits=10, decimal_places=2)
     qty = models.PositiveIntegerField()
+    no_of_boxes = models.PositiveIntegerField(blank=True,null=True)
     gross_weight = models.DecimalField(max_digits=10, decimal_places=2)
     empty_weight = models.DecimalField(max_digits=10, decimal_places=2)
     net_weight = models.DecimalField(max_digits=10, decimal_places=2)
@@ -154,7 +155,7 @@ class RetailSales(models.Model):
     delete_status = models.BooleanField(default=False)
     payment_mode = models.CharField(
         max_length=20,
-        choices=(('cash', 'Cash'), ('online', 'Online'), ('pending', 'Pending')),
+        choices=(('cash', 'Cash'), ('upi', 'UPI'),('cheque', 'Cheque'),('online', 'Online'), ('credit', 'Credit')),
         default='cash'
     )
     take_amay_employee = models.ForeignKey(Employe, on_delete=models.PROTECT, null=True, blank=True)
@@ -183,8 +184,8 @@ class WholesaleSales(models.Model):
     delete_status = models.BooleanField(default=False)
     payment_mode = models.CharField(
         max_length=20,
-        choices=(('pending', 'Pending'), ('cash', 'Cash'), ('online', 'Online')),
-        default='pending'
+        choices=(('credit', 'Credit'), ('cash', 'Cash'), ('online', 'Online')),
+        default='credit'
     )
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2)
 

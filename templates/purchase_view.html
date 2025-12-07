@@ -33,7 +33,7 @@
             <div class="row mt-2">
                 <div class="col-md-4"><strong>Branch:</strong> {{ purchase.branch.branch_name }}</div>
                 <div class="col-md-4"><strong>Added By:</strong> {{ purchase.added_by.get_full_name|default:purchase.added_by.username }}</div>
-                <div class="col-md-4"><strong>Added On:</strong> {{ purchase.added_on|date:"d M Y h:i A" }}</div>
+                <!-- <div class="col-md-4"><strong>Added On:</strong> {{ purchase.added_on|date:"d M Y h:i A" }}</div> -->
             </div>
         </div>
     </div>
@@ -54,6 +54,7 @@
                             <th>Tax %</th>
                             <th>Purchase Price</th>
                             <th>Qty</th>
+                            <th>No of boxes</th>
                             <th>Gross Wt</th>
                             <th>Empty Wt</th>
                             <th>Net Wt</th>
@@ -70,6 +71,7 @@
                             <td>{{ detail.tax_percentage }}%</td>
                             <td>₹{{ detail.purchase_price|floatformat:2 }}</td>
                             <td>{{ detail.qty|default:"—" }}</td>
+                            <td>{{ detail.no_of_boxes|default:"—" }}</td>
                             <td>{{ detail.gross_weight|floatformat:2|default:"—" }}</td>
                             <td>{{ detail.empty_weight|floatformat:2|default:"—" }}</td>
                             <td>{{ detail.net_weight|floatformat:2 }}</td>
@@ -77,17 +79,17 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="11" class="text-center text-muted py-4">No items found.</td>
+                            <td colspan="12" class="text-center text-muted py-4">No items found.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                     <tfoot class="bg-light">
                         <tr>
-                            <th colspan="10" class="text-right">Tax Amount:</th>
+                            <th colspan="11" class="text-right">Tax Amount:</th>
                             <th class="text-end">₹{{ purchase.tax_amount|floatformat:2|intcomma }}</th>
                         </tr>
                         <tr>
-                            <th colspan="10" class="text-right">Grand Total:</th>
+                            <th colspan="11" class="text-right">Grand Total:</th>
                             <th class="text-end text-primary font-weight-bold h5">
                                 ₹{{ purchase.grand_total|floatformat:2|intcomma }}
                             </th>

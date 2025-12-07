@@ -261,8 +261,8 @@ function updateTotalsAndFields() {
 
         let rowTotal = 0;
         if (isWeightBased) {
-            qtyInput.readOnly = true;
-            qtyInput.value = "0";
+            qtyInput.readOnly = false;
+            // qtyInput.value = "0";
             netWeightInput.readOnly = false;
             rowTotal = (price * netWeight) * (1 + tax / 100);
         } else {

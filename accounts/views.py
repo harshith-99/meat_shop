@@ -20,6 +20,77 @@ from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
+@login_required(login_url='login')
+def retail_item_report(request):
+    is_admin_like = request.user.role in ['super_admin', 'admin']
+    
+    # Get filter parameters
+    branch_id = request.GET.get('branch')
+    from_date_str = request.GET.get('from_date')
+    to_date_str = request.GET.get('to_date')
+
+    # Default: today
+    today = date.today()
+    from_date = from_date_str or today.strftime('%Y-%m-%d')
+    to_date = to_date_str or today.strftime('%Y-%m-%d')
+
+    # Parse dates safely
+    try:
+        from_date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+    except ValueError:
+        from_date_obj = today
+        from_date = today.strftime('%Y-%m-%d')
+
+    try:
+        to_date_obj = datetime.strptime(to_date, '%Y-%m-%d').date()
+    except ValueError:
+        to_date_obj = today
+        to_date = today.strftime('%Y-%m-%d')
+
+    # Base queryset for aggregation
+    items_qs = RetailSalesDetails.objects.filter(
+        sales__delete_status=False,
+        sales__sales_date__gte=from_date_obj,
+        sales__sales_date__lte=to_date_obj
+    )
+
+    # Apply branch filter
+    selected_branch = None
+    if is_admin_like:
+        if branch_id and branch_id.isdigit():
+            items_qs = items_qs.filter(sales__branch_id=branch_id)
+            selected_branch = Branch.objects.filter(branch_id=branch_id).first()
+    else:
+        # Non-admin: only their branch
+        if request.user.branch:
+            items_qs = items_qs.filter(sales__branch=request.user.branch)
+            selected_branch = request.user.branch
+        else:
+            items_qs = items_qs.none()
+
+    # Aggregate per item
+    item_data = items_qs.values(
+        'item__code', 'item__name'
+    ).annotate(
+        total_qty=Sum('qty'),
+        total_net_weight=Sum('net_weight'),
+        total_amount=Sum('total_amount')
+    ).order_by('item__name')
+
+    # Convert to list (if needed for template)
+    item_data = list(item_data)
+
+    context = {
+        'item_data': item_data,
+        'is_admin_like': is_admin_like,
+        'branches': Branch.objects.all() if is_admin_like else [],
+        'selected_branch': selected_branch,
+        'from_date': from_date,
+        'to_date': to_date,
+        'today': today.strftime('%Y-%m-%d'),
+    }
+    return render(request, 'retail_item_report.html', context)
+
 @login_required
 def employee_login_create(request):
     if request.user.role not in ['super_admin', 'admin']:
@@ -478,17 +549,66 @@ def purchase_add(request):
 @login_required(login_url='login')
 def purchase_list(request):
     is_admin_like = request.user.role in ['super_admin', 'admin']
-    if is_admin_like:
-        purchases = Purchase.objects.filter(delete_status=False).select_related('supplier', 'branch')
-    else:
-        purchases = Purchase.objects.filter(branch=request.user.branch, delete_status=False).select_related('supplier')
     
-    # Calculate totals for each purchase
+    # Get filter parameters
+    branch_id = request.GET.get('branch')
+    from_date_str = request.GET.get('from_date')
+    to_date_str = request.GET.get('to_date')
+
+    # Default: today
+    today = date.today()
+    from_date = from_date_str
+    to_date = to_date_str
+
+    # Parse dates safely
+    try:
+        if from_date_str:
+            from_date_obj = datetime.strptime(from_date_str, '%Y-%m-%d').date()
+        else:
+            from_date_obj = today
+    except ValueError:
+        from_date_obj = today
+        from_date = today.strftime('%Y-%m-%d')
+
+    try:
+        if to_date_str:
+            to_date_obj = datetime.strptime(to_date_str, '%Y-%m-%d').date()
+        else:
+            to_date_obj = today
+    except ValueError:
+        to_date_obj = today
+        to_date = today.strftime('%Y-%m-%d')
+
+    # Base queryset
+    purchases = Purchase.objects.filter(
+        delete_status=False,
+        purchase_date__gte=from_date_obj,
+        purchase_date__lte=to_date_obj
+    ).select_related('supplier', 'branch', 'added_by')
+
+    # Apply branch filter
+    selected_branch = None
+    if is_admin_like:
+        if branch_id and branch_id.isdigit():
+            purchases = purchases.filter(branch_id=branch_id)
+            selected_branch = Branch.objects.filter(branch_id=branch_id).first()
+    else:
+        # Non-admin: only their branch
+        if request.user.branch:
+            purchases = purchases.filter(branch=request.user.branch)
+            selected_branch = request.user.branch
+        else:
+            purchases = purchases.none()
+
+    # Order by latest first
+    purchases = purchases.order_by('-purchase_date', '-created_date')
+
+    # Calculate totals for display
     purchase_data = []
     for purchase in purchases:
         details = purchase.details.all()
-        total_qty = sum(detail.qty for detail in details)
-        total_net_weight = sum(detail.net_weight for detail in details)
+        total_qty = sum(d.qty for d in details)
+        total_net_weight = sum(d.net_weight for d in details)
         purchase_data.append({
             'purchase': purchase,
             'total_qty': total_qty,
@@ -498,6 +618,11 @@ def purchase_list(request):
     context = {
         'purchases': purchase_data,
         'is_admin_like': is_admin_like,
+        'branches': Branch.objects.all() if is_admin_like else [],
+        'selected_branch': selected_branch,
+        'from_date': from_date or today.strftime('%Y-%m-%d'),
+        'to_date': to_date or today.strftime('%Y-%m-%d'),
+        'today': today.strftime('%Y-%m-%d'),
     }
     return render(request, 'purchase_list.html', context)
 

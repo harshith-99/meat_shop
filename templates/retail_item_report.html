@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="container-fluid">
-    <h1 class="h3 mb-4 text-gray-800">Purchase List</h1>
+    <h1 class="h3 mb-4 text-gray-800">Item-Wise Retail Sales Report</h1>
 
     {% for message in messages %}
     <div class="alert alert-{{ message.tags }}">{{ message }}</div>
@@ -12,7 +12,7 @@
     <!-- Filters Card -->
     <div class="card shadow mb-4">
         <div class="card-header py-3 bg-primary text-white">
-            <h6 class="m-0 font-weight-bold">Filter Purchases</h6>
+            <h6 class="m-0 font-weight-bold">Filter Report</h6>
         </div>
         <div class="card-body">
             <form method="get" class="row g-3">
@@ -42,7 +42,7 @@
                 <div class="col-md-3">
                     <label class="form-label">Your Branch</label>
                     <input type="text" class="form-control" value="{{ selected_branch.branch_name }} ({{ selected_branch.alias }})" readonly>
-                    
+                    <small class="text-muted">You can only view your branch data</small>
                 </div>
                 {% endif %}
                 {% endif %}
@@ -51,76 +51,53 @@
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-filter"></i> Apply Filter
                     </button>
-                    <a href="{% url 'purchase_list' %}" class="btn btn-secondary">Clear</a>
+                    <a href="{% url 'retail_item_report' %}" class="btn btn-secondary">Clear</a>
                 </div>
             </form>
         </div>
     </div>
 
     <!-- Results Info -->
-    <!-- <div class="alert alert-info">
-        Showing purchases from <strong>{{ from_date }}</strong> to <strong>{{ to_date }}</strong>
+    <div class="alert alert-info">
+        Showing retail sales items from <strong>{{ from_date }}</strong> to <strong>{{ to_date }}</strong>
         {% if selected_branch %}
             for <strong>{{ selected_branch.branch_name }}</strong>
         {% elif is_admin_like %}
             <strong>(All Branches)</strong>
         {% endif %}
-        &nbsp; | &nbsp; Total: <strong>{{ purchases|length }}</strong> purchase{{ purchases|length|pluralize }}
-    </div> -->
+        &nbsp; | &nbsp; Total Items: <strong>{{ item_data|length }}</strong>
+    </div>
 
-    <!-- Purchase Table -->
+    <!-- Items Table -->
     <div class="card shadow mb-4">
         <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Purchases</h6>
+            <h6 class="m-0 font-weight-bold text-primary">Item-Wise Sales</h6>
         </div>
         <div class="card-body">
             <div class="table-responsive">
                 <table class="table table-bordered table-hover">
                     <thead class="table-light">
                         <tr>
-                            <th>Invoice No</th>
-                            <th>Date</th>
-                            <th>Supplier</th>
-                            {% if is_admin_like %}<th>Branch</th>{% endif %}
-                            <th>Qty</th>
-                            <th>Net Weight</th>
-                            <th>Tax</th>
-                            <th>Grand Total</th>
-                            <th>Actions</th>
+                            <th>Item Code</th>
+                            <th>Item Name</th>
+                            <th>Total Qty</th>
+                            <th>Total Net Weight (kg)</th>
+                            <th>Total Amount (₹)</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for data in purchases %}
+                        {% for item in item_data %}
                         <tr>
-                            <td><strong>{{ data.purchase.invoice_number }}</strong></td>
-                            <td>{{ data.purchase.purchase_date|date:"d M Y" }}</td>
-                            <td>{{ data.purchase.supplier.supplier_name }}</td>
-                            {% if is_admin_like %}
-                            <td>{{ data.purchase.branch.branch_name }}</td>
-                            {% endif %}
-                            <td>{{ data.total_qty }}</td>
-                            <td>{{ data.total_net_weight|floatformat:2 }} kg</td>
-                            <td>₹{{ data.purchase.tax_amount|floatformat:2 }}</td>
-                            <td><strong>₹{{ data.purchase.grand_total|floatformat:2 }}</strong></td>
-                            <td>
-                                <a href="{% url 'purchase_view' data.purchase.pk %}" class="btn btn-sm btn-info">
-                                    View
-                                </a>
-                                {% if is_admin_like %}
-                                <form action="{% url 'purchase_delete' data.purchase.pk %}" method="post" style="display:inline;">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn btn-sm btn-danger" 
-                                            onclick="return confirm('Delete this purchase permanently? Stock will be reverted.')">
-                                        Delete
-                                    </button>
-                                </form>
-                                {% endif %}
-                            </td>
+                            <td><strong>{{ item.item__code }}</strong></td>
+                            <td>{{ item.item__name }}</td>
+                            <td>{{ item.total_qty|default:0 }}</td>
+                            <td>{{ item.total_net_weight|floatformat:2|default:"0.00" }}</td>
+                            <td><strong>{{ item.total_amount|floatformat:2|default:"0.00" }}</strong></td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="{% if is_admin_like %}9{% else %}8{% endif %}" class="text-center text-muted py-4">
-                                No purchases found for the selected filters.
+                            <td colspan="5" class="text-center text-muted py-4">
+                                No retail sales items found for the selected filters.
                             </td>
                         </tr>
                         {% endfor %}
