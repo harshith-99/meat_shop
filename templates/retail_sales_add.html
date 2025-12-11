@@ -143,13 +143,13 @@
                                 <span class="text-danger">{{ form.price_per_unit.errors|join:", " }}</span>
                                 {{ form.price_per_unit }}
                             </td>
-                            <td>
-                                <span class="text-danger">{{ form.qty.errors|join:", " }}</span>
+                            <td class="qty-col">
                                 {{ form.qty }}
+                                <!-- <small class="text-muted">Qty</small> -->
                             </td>
-                            <td>
-                                <span class="text-danger">{{ form.net_weight.errors|join:", " }}</span>
+                            <td class="net-weight-col">
                                 {{ form.net_weight }}
+                                <!-- <small class="text-muted">Net Wt (kg)</small> -->
                             </td>
                             <td>
                                 <span class="text-danger">{{ form.tax_percentage.errors|join:", " }}</span>
@@ -261,7 +261,7 @@ function updateTotalsAndFields() {
 
         let rowTotal = 0;
         if (isWeightBased) {
-            qtyInput.readOnly = false;
+            qtyInput.readOnly = true;
             // qtyInput.value = "0";
             netWeightInput.readOnly = false;
             rowTotal = (price * netWeight) * (1 + tax / 100);
@@ -407,5 +407,89 @@ $('#id_take_amay_employee').change(function() {
             .removeClass('border-danger').removeAttr('required');
     }
 }).trigger('change');
+
+// Auto-detect item type and show/hide qty vs net_weight
+function updateItemFields(row) {
+    const itemId = row.find('[name$="-item"]').val();
+    const qtyField = row.find('[name$="-qty"]');
+    const netWeightField = row.find('[name$="-net_weight"]');
+
+    if (!itemId) {
+        qtyField.closest('.col-md-2').show();
+        netWeightField.closest('.col-md-2').show();
+        return;
+    }
+
+    $.get('/accounts/api/item-details/' + itemId + '/', function(data) {
+        if (data.is_weight_based) {
+            qtyField.val('0').prop('readonly', true).closest('.col-md-2').hide();
+            netWeightInput.prop('readonly', false)
+                         .prop('required', true)           // ← REQUIRED
+                         .addClass('border-danger')        // ← Visual cue
+                         .focus();
+        } else {
+            netWeightField.val('0.00').prop('readonly', true).closest('.col-md-2').hide();
+            qtyInput.prop('readonly', false)
+                    .prop('required', true)           // ← REQUIRED
+                    .addClass('border-danger')        // ← Visual cue
+                    .focus();
+        }
+        updateTotalsAndFields();
+    });
+}
+
+// Run on item select
+$(document).on('change', '[name$="-item"]', function() {
+    updateItemFields($(this).closest('tr'));
+});
+
+// Also run when item is loaded via search
+$(document).ajaxStop(function() {
+    $("#salesTable tbody tr").each(function() {
+        const itemId = $(this).find('[name$="-item"]').val();
+        if (itemId && !$(this).data('fields-updated')) {
+            updateItemFields($(this));
+            $(this).data('fields-updated', true);
+        }
+    });
+});
+
+// FINAL: BLOCK SUBMIT IF ANY ROW HAS TOTAL IS 0.00 OR ITEM MISSING
+$('form').on('submit', function(e) {
+    let hasError = false;
+    let errors = [];
+
+    $("#salesTable tbody tr").each(function() {
+        const $row = $(this);
+        if ($row.is(':hidden') || $row.find("input[name$='-DELETE']").prop('checked')) return;
+
+        const itemId = $row.find('[name$="-item"]').val();
+        const total = parseFloat($row.find('[name$="-total_amount"]').val()) || 0;
+        const qty = parseFloat($row.find('[name$="-qty"]').val()) || 0;
+        const netWeight = parseFloat($row.find('[name$="-net_weight"]').val()) || 0;
+
+        if (!itemId) {
+            hasError = true;
+            errors.push("Row " + ($row.index() + 1) + ": Please select an item");
+            $row.find('.item-name').addClass('border-danger');
+        } else {
+            $row.find('.item-name').removeClass('border-danger');
+        }
+
+        if (total <= 0 || (qty <= 0 && netWeight <= 0)) {
+            hasError = true;
+            errors.push("Row " + ($row.index() + 1) + ": Total is ₹0.00 — enter quantity or weight");
+            $row.find('[name$="-qty"], [name$="-net_weight"]').addClass('border-danger');
+        } else {
+            $row.find('[name$="-qty"], [name$="-net_weight"]').removeClass('border-danger');
+        }
+    });
+
+    if (hasError) {
+        e.preventDefault();
+        alert("Please fix the following:\n\n• " + errors.join("\n• "));
+        return false;
+    }
+});
 </script>
 {% endblock %}

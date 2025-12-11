@@ -157,7 +157,7 @@
                 <td>{{ forloop.counter }}</td>
                 <td class="text-left">{{ d.item.name }}</td>
                 <td>{{ d.qty|default:"—" }}</td>
-                <td>{{ d.net_weight|floatformat:2|default:"—" }}</td>
+                <td>{{ d.net_weight|floatformat:3|default:"—" }}</td>
                 <td class="text-right">₹{{ d.price_per_unit|floatformat:2 }}</td>
                 <td class="text-right">₹{{ d.total_amount|floatformat:2|intcomma }}</td>
             </tr>

@@ -64,7 +64,7 @@
                             <th>Type</th>
                             <th>Category</th>
                             <th>Item</th>
-                            <th>Tax %</th>
+                            <!-- <th>Tax %</th> -->
                             <th>P Price</th>
                             <th>Qty</th>
                             <th>No Of Boxes</th>
@@ -85,8 +85,8 @@
                                     <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td>
                                 {% elif field.name == "item" %}
                                     <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td>
-                                {% elif field.name == "tax_percentage" %}
-                                    <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td>
+                                <!-- {% elif field.name == "tax_percentage" %}
+                                    <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td> -->
                                 {% elif field.name == "purchase_price" %}
                                     <td><span class="text-danger">{{ field.errors|join:", " }}</span>{{ field }}</td>
                                 {% elif field.name == "qty" %}
@@ -136,42 +136,60 @@
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
+$(document).ready(function() {
     const resetForm = {{ reset_form|yesno:"true,false"|lower }};
 
-    // BULLETPROOF FIX: Force ALL decimal fields to valid format before submit
-    $('form').on('submit', function () {
-        const selectors = 'input[name*="purchase_price"], input[name*="gross_weight"], ' +
-                         'input[name*="empty_weight"], input[name*="net_weight"], ' +
-                         'input[name*="total_amount"], input[name*="qty"]';
+    // BULLETPROOF FIX: Convert ALL number fields to proper decimal before submit
+    $('form').on('submit', function(e) {
+        let hasError = false;
 
-        $(this).find(selectors).each(function () {
-            let val = $(this).val().toString().trim();
+        $(this).find('input[name*="purchase_price"], input[name*="gross_weight"], ' +
+                    'input[name*="empty_weight"], input[name*="net_weight"], ' +
+                    'input[name*="total_amount"], input[name*="qty"], input[name*="no_of_boxes"]').each(function() {
+            let $input = $(this);
+            let val = $input.val().toString().trim();
 
+            // Empty → 0.00
             if (!val || val === '' || val === 'null' || val === 'undefined') {
-                $(this).val('0.00');
+                $input.val('0.00');
                 return;
             }
 
-            // Convert whole numbers → 50 → 50.00
+            // Clean non-numeric characters (keep dot and minus)
+            val = val.replace(/[^\d.-]/g, '');
+
+            // Convert whole numbers to decimal
             if (/^\d+$/.test(val)) {
                 val = val + '.00';
             }
-            // 50.5 → 50.50
-            else if (/^\d+\.\d{1}$/.test(val)) {
-                val = val + '0';
-            }
             // 50. → 50.00
-            else if (/^\d+\.$/.test(val)) {
+            else if (val.endsWith('.')) {
                 val = val + '00';
             }
-            // Final safe conversion
-            else {
-                const num = parseFloat(val);
-                val = isNaN(num) ? '0.00' : num.toFixed(2);
+            // 50.5 → 50.50
+            else if (/^\d+\.\d$/.test(val)) {
+                val = val + '0';
             }
 
-            $(this).val(val);
+            // Final parse
+            let num = parseFloat(val);
+            if (isNaN(num)) {
+                num = 0;
+                hasError = true;
+                $input.addClass('is-invalid border-danger');
+            } else {
+                $input.removeClass('is-invalid border-danger');
+            }
+
+            $input.val(num.toFixed(2));
         });
+
+        // Stop submit if any invalid number
+        if (hasError) {
+            e.preventDefault();
+            alert("Please enter valid numbers (whole numbers like 50 will be saved as 50.00)");
+            return false;
+        }
     });
 
     function updateItems(categoryId, $itemSelect) {
@@ -193,7 +211,7 @@
 
         $.get('/accounts/api/category-details/' + categoryId + '/', function(data) {
             const isWeightBased = data.is_weight_based === true;
-            $row.find("input[name$='is_weight_based']").val(isWeightBased);
+            $row.find("input[name$='is_weight_based']").val(isWeightBased ? 'true' : 'false');
 
             const $qty = $row.find("input[name$='qty']");
             const $gross = $row.find("input[name$='gross_weight']");
@@ -201,15 +219,15 @@
             const $net = $row.find("input[name$='net_weight']");
 
             if (isWeightBased) {
-                $qty.prop('readonly', false).css('background-color', '');
+                $qty.val('0').prop('readonly', true).css('background-color', '#f0f0f0');
                 $gross.prop('readonly', false).css('background-color', '');
                 $empty.prop('readonly', false).css('background-color', '');
-                $net.prop('readonly', true);
+                $net.prop('readonly', true).val('0.00');
             } else {
                 $qty.prop('readonly', false).css('background-color', '');
-                $gross.val('0').prop('readonly', true).css('background-color', '#f0f0f0');
-                $empty.val('0').prop('readonly', true).css('background-color', '#f0f0f0');
-                $net.val('0').prop('readonly', true);
+                $gross.val('0.00').prop('readonly', true).css('background-color', '#f0f0f0');
+                $empty.val('0.00').prop('readonly', true).css('background-color', '#f0f0f0');
+                $net.val('0.00').prop('readonly', true);
             }
 
             calculateRowTotal($row);
@@ -226,8 +244,7 @@
         if (isWeightBased) {
             const gross = parseFloat($row.find("input[name$='gross_weight']").val()) || 0;
             const empty = parseFloat($row.find("input[name$='empty_weight']").val()) || 0;
-            const net = Math.max(0, gross - empty);  // Never negative
-
+            const net = Math.max(0, gross - empty);
             $row.find("input[name$='net_weight']").val(net.toFixed(2));
             baseAmount = price * net;
         } else {
@@ -246,24 +263,24 @@
         let totalTax = 0;
 
         $("#purchaseTable tbody tr").not("[style*='display: none']").each(function() {
-            const $row = $(this);
-            if ($row.find("input[name$='-DELETE']").is(":checked")) return;
+            if ($(this).find("input[name$='-DELETE']").is(":checked")) return;
 
-            const total = parseFloat($row.find("input[name$='total_amount']").val()) || 0;
-            const price = parseFloat($row.find("input[name$='purchase_price']").val()) || 0;
-            const tax = parseFloat($row.find("select[name$='tax_percentage']").val()) || 0;
-            const isWeightBased = $row.find("input[name$='is_weight_based']").val() === 'true';
+            const total = parseFloat($(this).find("input[name$='total_amount']").val()) || 0;
+            grandTotal += total;
+
+            const price = parseFloat($(this).find("input[name$='purchase_price']").val()) || 0;
+            const tax = parseFloat($(this).find("select[name$='tax_percentage']").val()) || 0;
+            const isWeightBased = $(this).find("input[name$='is_weight_based']").val() === 'true';
 
             let qtyOrWeight = 0;
             if (isWeightBased) {
-                const gross = parseFloat($row.find("input[name$='gross_weight']").val()) || 0;
-                const empty = parseFloat($row.find("input[name$='empty_weight']").val()) || 0;
+                const gross = parseFloat($(this).find("input[name$='gross_weight']").val()) || 0;
+                const empty = parseFloat($(this).find("input[name$='empty_weight']").val()) || 0;
                 qtyOrWeight = gross - empty;
             } else {
-                qtyOrWeight = parseFloat($row.find("input[name$='qty']").val()) || 0;
+                qtyOrWeight = parseFloat($(this).find("input[name$='qty']").val()) || 0;
             }
 
-            grandTotal += total;
             totalTax += price * qtyOrWeight * (tax / 100);
         });
 
@@ -271,58 +288,58 @@
         $("#id_grand_total").val(grandTotal.toFixed(2));
     }
 
-    $(document).ready(function() {
-        if (resetForm) {
-            $("#id_form-TOTAL_FORMS").val("1");
-            $("#purchaseTable tbody tr:gt(0)").remove();
-            $("#purchaseTable tbody tr:first input, #purchaseTable tbody tr:first select")
-                .not("input[type=hidden], input[name*='TOTAL']")
-                .val("");
-        }
+    // Reset form
+    if (resetForm) {
+        $("#id_form-TOTAL_FORMS").val("1");
+        $("#purchaseTable tbody tr:gt(0)").remove();
+        $("#purchaseTable tbody tr:first input, #purchaseTable tbody tr:first select")
+            .not("input[type=hidden]")
+            .val("");
+    }
 
-        $("#purchaseTable tbody tr").each(function() {
-            const $row = $(this);
-            if ($row.find("select[name$='category']").val()) {
-                updateRowFields($row);
-            }
-        });
-
-        $("#addRow").on("click", function() {
-            const $table = $("#purchaseTable tbody");
-            const totalForms = parseInt($("#id_form-TOTAL_FORMS").val());
-            const $first = $table.find("tr:first-child").clone();
-
-            $first.find("input, select").each(function() {
-                const name = this.name.replace(/-\d+-/, "-" + totalForms + "-");
-                const id = this.id.replace(/-\d+-/, "-" + totalForms + "-");
-                $(this).attr({ name: name, id: id }).val("");
-                if (this.tagName === "SELECT") this.selectedIndex = 0;
-            });
-            $first.find("input[name$='is_weight_based']").val("false");
-            $table.append($first);
-            $("#id_form-TOTAL_FORMS").val(totalForms + 1);
-        });
-
-        $(document).on("click", ".remove-row", function() {
-            const $row = $(this).closest("tr");
-            $row.find("input[name$='-DELETE']").prop("checked", true);
-            $row.hide();
-            calculateGrandTotal();
-        });
-
-        $(document).on("change", "select[name$='category']", function() {
-            const $row = $(this).closest("tr");
-            const $item = $row.find("select[name$='item']");
-            updateItems(this.value, $item);
+    // Initialize existing rows
+    $("#purchaseTable tbody tr").each(function() {
+        const $row = $(this);
+        if ($row.find("select[name$='category']").val()) {
             updateRowFields($row);
-        });
-
-        $(document).on("input change", "#purchaseTable input, #purchaseTable select", function() {
-            const $row = $(this).closest("tr");
-            if ($row.is(":visible")) {
-                calculateRowTotal($row);
-            }
-        });
+        }
     });
+
+    // Add Row
+    $("#addRow").on("click", function() {
+        const $table = $("#purchaseTable tbody");
+        const totalForms = parseInt($("#id_form-TOTAL_FORMS").val());
+        const $first = $table.find("tr:first-child").clone();
+
+        $first.find("input, select").each(function() {
+            const name = this.name ? this.name.replace(/-\d+-/, "-" + totalForms + "-") : "";
+            const id = this.id ? this.id.replace(/-\d+-/, "-" + totalForms + "-") : "";
+            $(this).attr({ name: name, id: id }).val("");
+            if ($(this).is("select")) this.selectedIndex = 0;
+        });
+        $first.find("input[name$='is_weight_based']").val("false");
+        $table.append($first);
+        $("#id_form-TOTAL_FORMS").val(totalForms + 1);
+    });
+
+    // Remove Row
+    $(document).on("click", ".remove-row", function() {
+        $(this).closest("tr").find("input[name$='-DELETE']").prop("checked", true).closest("tr").hide();
+        calculateGrandTotal();
+    });
+
+    // Category change
+    $(document).on("change", "select[name$='category']", function() {
+        const $row = $(this).closest("tr");
+        const $item = $row.find("select[name$='item']");
+        updateItems(this.value, $item);
+        updateRowFields($row);
+    });
+
+    // Recalculate on input
+    $(document).on("input change", "#purchaseTable input, #purchaseTable select", function() {
+        calculateRowTotal($(this).closest("tr"));
+    });
+});
 </script>
 {% endblock %}

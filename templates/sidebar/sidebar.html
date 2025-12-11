@@ -26,7 +26,12 @@
     <script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
     <!-- SB Admin 2 JS -->
     <script src="{% static 'js/sb-admin-2.min.js' %}"></script>
-
+    <style>
+    @media (min-width: 768px) {
+        .sidebar {
+            width: 11rem !important;
+        }
+    }</style>
 </head>
 
 <body id="page-top">
@@ -40,9 +45,10 @@
             <!-- Sidebar - Brand -->
             <a class="sidebar-brand d-flex align-items-center justify-content-center" href="index.html">
                 <div class="sidebar-brand-icon rotate-n-15">
-                    <i class="fas fa-laugh-wink"></i>
+                    
                 </div>
-                <div class="sidebar-brand-text mx-3">Meat Shop</div>
+                <div class="sidebar-brand-text mx-3"><img style="height: 72px;" class="img-profile rounded-circle"
+                                    src="{%static 'img/jaan_logo.jpeg' %}"></div>
             </a>
 
             <!-- Divider -->
@@ -133,13 +139,13 @@
             {% if request.user.role == 'admin' or request.user.role == 'super_admin' or request.user.role == 'manager'%}
 
             <li class="nav-item">
-                <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapsePages4"
-                    aria-expanded="true" aria-controls="collapsePages4">
+                <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapsePages5"
+                    aria-expanded="true" aria-controls="collapsePages5">
                     <i class="fas fa-fw fa-folder"></i>
                     <span>Reports</span>
                 </a>
                 
-                <div id="collapsePages4" class="collapse" aria-labelledby="headingPages" data-parent="#accordionSidebar">
+                <div id="collapsePages5" class="collapse" aria-labelledby="headingPages" data-parent="#accordionSidebar">
                     <div class="bg-white py-2 collapse-inner rounded">
                         <a class="collapse-item" href="{% url 'retail_item_report' %}">Retail Item Report</a>
                     </div>

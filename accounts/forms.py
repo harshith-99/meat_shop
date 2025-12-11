@@ -41,7 +41,7 @@ class EmployeeLoginForm(forms.ModelForm):
 
         emp = self.cleaned_data['employee']
         user.role = emp.role
-        user.branch = emp.branch  # THIS LINE WAS MISSING
+        user.branch = emp.branch
 
         if commit:
             user.save()
@@ -353,15 +353,15 @@ class PurchaseDetailForm(forms.ModelForm):
 
     purchase_type = forms.ChoiceField(
         choices=[('retail', 'Retail'), ('wholesale', 'Wholesale')],
-        widget=forms.Select(attrs={'class': 'form-control', 'style': 'width: 90px;', 'required': 'true', 'autocomplete': 'off'})
+        widget=forms.Select(attrs={'class': 'form-control', 'style': 'width: 85px;', 'required': 'true', 'autocomplete': 'off'})
     )
     category = forms.ModelChoiceField(
         queryset=ItemCategory.objects.all(),
-        widget=forms.Select(attrs={'class': 'form-control category-select', 'style': 'width: fit-content;', 'required': 'true', 'autocomplete': 'off'})
+        widget=forms.Select(attrs={'class': 'form-control category-select', 'style': 'width: 93px;', 'required': 'true', 'autocomplete': 'off'})
     )
     item = forms.ModelChoiceField(
         queryset=Item.objects.none(),
-        widget=forms.Select(attrs={'class': 'form-control item-select', 'style': 'width: fit-content;', 'required': 'true', 'autocomplete': 'off'})
+        widget=forms.Select(attrs={'class': 'form-control item-select', 'style': 'width: 93px;', 'required': 'true', 'autocomplete': 'off'})
     )
     tax_percentage = forms.ChoiceField(
         choices=[('0', '0%'), ('12', '12%'), ('18', '18%')],
@@ -370,13 +370,13 @@ class PurchaseDetailForm(forms.ModelForm):
         required=False
     )
 
-    purchase_price = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'required': 'true', 'autocomplete': 'off'}))
-    qty = forms.IntegerField(widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}))
-    no_of_boxes = forms.IntegerField(widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}))
-    gross_weight = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}))
-    empty_weight = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}))
-    net_weight = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}))
-    total_amount = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'required': 'true', 'readonly': 'true', 'autocomplete': 'off'}))
+    purchase_price = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'required': 'true', 'style': 'width: 68px;','autocomplete': 'off'}))
+    qty = forms.IntegerField(widget=forms.NumberInput(attrs={'class': 'form-control', 'style': 'width: 68px;','autocomplete': 'off'}))
+    no_of_boxes = forms.IntegerField(widget=forms.NumberInput(attrs={'class': 'form-control', 'style': 'width: 68px;','autocomplete': 'off'}),required=False)
+    gross_weight = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'style': 'width: 85px;','autocomplete': 'off'}))
+    empty_weight = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'style': 'width: 85px;','autocomplete': 'off'}))
+    net_weight = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'style': 'width: 85px;','autocomplete': 'off'}))
+    total_amount = forms.DecimalField(widget=forms.NumberInput(attrs={'class': 'form-control', 'style': 'width: 85px;','required': 'true', 'readonly': 'true', 'autocomplete': 'off'}))
     is_weight_based = forms.CharField(widget=forms.HiddenInput(), required=False)
 
     def __init__(self, *args, **kwargs):
