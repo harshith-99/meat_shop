@@ -878,12 +878,12 @@ def retail_sales_add(request):
                         if item.category.is_weight_based:
                             if item.stock < net_weight:
                                 messages.error(request, f"Low stock: {item.name}")
-                                raise transaction.TransactionManagementError()
+                                #raise transaction.TransactionManagementError()
                             item.stock -= net_weight
                         else:
                             if item.stock < qty:
                                 messages.error(request, f"Low stock: {item.name}")
-                                raise transaction.TransactionManagementError()
+                                #raise transaction.TransactionManagementError()
                             item.stock -= qty
                         item.save()
 
