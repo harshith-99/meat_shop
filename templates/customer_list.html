@@ -1,0 +1,223 @@
+{% load static %}
+{% include "sidebar/sidebar.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Customer List</h2>
+
+    {% if request.user.role == 'admin' or request.user.role == 'super_admin' or request.user.role == 'manager' %}
+        <a href="{% url 'customer_add' %}" class="btn btn-success mb-3">+ Add Customer</a>
+    {% endif %}
+
+    <!-- Success Messages Only -->
+    {% for message in messages %}
+        {% if message.tags == 'success' %}
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endif %}
+    {% endfor %}
+
+    <!-- Search Bar -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <input type="text" id="searchInput" class="form-control" placeholder="Search by Name, Phone, GSTIN or Address...">
+        </div>
+        <div class="col-md-6 text-end">
+            <small class="text-muted">Total Customers: <strong>{{ customers|length }}</strong></small>
+        </div>
+    </div>
+
+    <!-- Table with Sortable Headers -->
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover" id="customerTable">
+            <thead class="table-light">
+                <tr>
+                    <th class="sortable" data-sort="sno">S.No <i class="fas fa-sort ms-1"></i></th>
+                    <th class="sortable" data-sort="name">Name <i class="fas fa-sort ms-1"></i></th>
+                    <th class="sortable" data-sort="phone">Phone <i class="fas fa-sort ms-1"></i></th>
+                    <th>Address</th>
+                    <th class="sortable" data-sort="gstin">GSTIN <i class="fas fa-sort ms-1"></i></th>
+                    <th class="sortable" data-sort="wholesale">Wholesale <i class="fas fa-sort ms-1"></i></th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="customerTableBody">
+                {% for customer in customers %}
+                <tr>
+                    <td class="sno">{{ forloop.counter }}</td>
+                    <td class="name">{{ customer.customer_name|default:"—" }}</td>
+                    <td class="phone">{{ customer.customer_phone|default:"—" }}</td>
+                    <td>{{ customer.customer_address|default:"—" }}</td>
+                    <td class="gstin">{{ customer.gstin|default:"—" }}</td>
+                    <td class="wholesale">
+                        {% if customer.whole_sale %}
+                            <span class="text-success fw-bold">Wholesale</span>
+                        {% else %}
+                            <span class="text-muted">Retail</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{% url 'customer_update' customer.pk %}" class="btn btn-warning btn-sm">Edit</a>
+                        <a href="{% url 'customer_delete' customer.pk %}" class="btn btn-danger btn-sm ms-1"
+                           onclick="return confirm('Delete this customer?');">Delete</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center py-4">No customers found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    <nav aria-label="Customer pagination" class="mt-4">
+        <ul class="pagination justify-content-center" id="pagination">
+            <!-- Pagination links will be injected by JS -->
+        </ul>
+    </nav>
+</div>
+
+<!-- Font Awesome for sort icons (if not already loaded) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+<script>
+// Client-side Search, Sort & Pagination
+document.addEventListener("DOMContentLoaded", function () {
+    const table = document.getElementById("customerTable");
+    const tbody = document.getElementById("customerTableBody");
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+    const searchInput = document.getElementById("searchInput");
+    const pagination = document.getElementById("pagination");
+
+    let currentPage = 1;
+    const rowsPerPage = 10;
+    let sortColumn = null;
+    let sortDirection = 'asc';
+
+    function renderTable(data) {
+        tbody.innerHTML = "";
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4">No customers found.</td></tr>';
+            pagination.innerHTML = "";
+            return;
+        }
+
+        data.forEach((row, index) => {
+            const clonedRow = row.cloneNode(true);
+            clonedRow.querySelector(".sno").textContent = index + 1 + (currentPage - 1) * rowsPerPage;
+            tbody.appendChild(clonedRow);
+        });
+
+        renderPagination(data.length);
+    }
+
+    function renderPagination(totalRows) {
+        const totalPages = Math.ceil(totalRows / rowsPerPage);
+        pagination.innerHTML = "";
+
+        if (totalPages <= 1) return;
+
+        // Previous
+        const prevLi = document.createElement("li");
+        prevLi.className = "page-item" + (currentPage === 1 ? " disabled" : "");
+        prevLi.innerHTML = `<a class="page-link" href="#" data-page="${currentPage - 1}">Previous</a>`;
+        pagination.appendChild(prevLi);
+
+        // Pages
+        for (let i = 1; i <= totalPages; i++) {
+            const li = document.createElement("li");
+            li.className = "page-item" + (i === currentPage ? " active" : "");
+            li.innerHTML = `<a class="page-link" href="#" data-page="${i}">${i}</a>`;
+            pagination.appendChild(li);
+        }
+
+        // Next
+        const nextLi = document.createElement("li");
+        nextLi.className = "page-item" + (currentPage === totalPages ? " disabled" : "");
+        nextLi.innerHTML = `<a class="page-link" href="#" data-page="${currentPage + 1}">Next</a>`;
+        pagination.appendChild(nextLi);
+    }
+
+    function getFilteredAndSortedData() {
+        let data = rows.filter(row => row.style.display !== "none");
+
+        // Search
+        const query = searchInput.value.toLowerCase();
+        if (query) {
+            data = rows.filter(row => {
+                const name = row.querySelector(".name").textContent.toLowerCase();
+                const phone = row.querySelector(".phone").textContent.toLowerCase();
+                const address = row.querySelector("td:nth-child(4)").textContent.toLowerCase();
+                const gstin = row.querySelector(".gstin").textContent.toLowerCase();
+                return name.includes(query) || phone.includes(query) || address.includes(query) || gstin.includes(query);
+            });
+        }
+
+        // Sort
+        if (sortColumn) {
+            data.sort((a, b) => {
+                let aVal = a.querySelector(`.${sortColumn}`).textContent.trim();
+                let bVal = b.querySelector(`.${sortColumn}`).textContent.trim();
+
+                if (sortColumn === 'wholesale') {
+                    aVal = aVal === 'Wholesale' ? 1 : 0;
+                    bVal = bVal === 'Wholesale' ? 1 : 0;
+                }
+
+                if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+                if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+
+        return data;
+    }
+
+    function updateView() {
+        const data = getFilteredAndSortedData();
+        const start = (currentPage - 1) * rowsPerPage;
+        const end = start + rowsPerPage;
+        const pageData = data.slice(start, end);
+        renderTable(pageData);
+    }
+
+    // Search
+    searchInput.addEventListener("input", () => {
+        currentPage = 1;
+        updateView();
+    });
+
+    // Sort
+    document.querySelectorAll(".sortable").forEach(th => {
+        th.style.cursor = "pointer";
+        th.addEventListener("click", () => {
+            const column = th.getAttribute("data-sort");
+            if (sortColumn === column) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = column;
+                sortDirection = 'asc';
+            }
+            currentPage = 1;
+            updateView();
+        });
+    });
+
+    // Pagination
+    pagination.addEventListener("click", e => {
+        e.preventDefault();
+        const link = e.target.closest("a");
+        if (!link || link.parentElement.classList.contains("disabled")) return;
+        currentPage = parseInt(link.getAttribute("data-page"));
+        updateView();
+    });
+
+    // Initial render
+    updateView();
+});
+</script>
+{% endblock %}

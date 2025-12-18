@@ -1,0 +1,65 @@
+{% load static %}
+{% include "sidebar/sidebar.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">
+        {% if customer %}Update Customer{% else %}Add Customer{% endif %}
+    </h1>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Customer Details</h6>
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label>{{ form.customer_name.label }}</label>
+                        {{ form.customer_name }}
+                        {% if form.customer_name.errors %}
+                            <small class="text-danger">{{ form.customer_name.errors }}</small>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label>{{ form.customer_phone.label }}</label>
+                        {{ form.customer_phone }}
+                        {% if form.customer_phone.errors %}
+                            <small class="text-danger">{{ form.customer_phone.errors }}</small>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label>{{ form.customer_address.label }}</label>
+                    {{ form.customer_address }}
+                    {% if form.customer_address.errors %}
+                        <small class="text-danger">{{ form.customer_address.errors }}</small>
+                    {% endif %}
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label>{{ form.gstin.label }}</label>
+                        {{ form.gstin }}
+                        {% if form.gstin.errors %}
+                            <small class="text-danger">{{ form.gstin.errors }}</small>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="form-check mt-4">
+                            {{ form.whole_sale }}
+                            <label class="form-check-label">{{ form.whole_sale.label }}</label>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Save Customer</button>
+                <a href="{% url 'customer_list' %}" class="btn btn-secondary">Cancel</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

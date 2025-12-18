@@ -247,9 +247,7 @@ class ItemForm(forms.ModelForm):
     unit = forms.ChoiceField(
         choices=[
             ('kg', 'Kilogram'),
-            ('gm', 'Gram'),
-            ('pcs', 'Pieces'),
-            ('pkt', 'Packet'),
+            ('num', 'Number'),
         ],
         widget=forms.Select(attrs={'class': 'form-control'})
     )
@@ -267,31 +265,74 @@ class ItemForm(forms.ModelForm):
     class Meta:
         model = Item
         fields = ['name', 'code', 'category', 'price_per_unit_retail', 'price_per_unit_wholesale', 'unit', 'stock']
-    
-    # forms.py (Add this in ItemForm __init__)
 
     def __init__(self, *args, **kwargs):
-        user = kwargs.pop('user', None)  # Get current user
+        user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
 
-        # ONLY MANAGER: Allow editing Retail & Wholesale prices → Everything else readonly
-        if user and user.role == 'manager':
-            # Fields Manager CANNOT edit
-            readonly_fields = ['name', 'code', 'category', 'unit', 'stock']
-            for field_name in readonly_fields:
-                self.fields[field_name].widget.attrs['readonly'] = True
-                self.fields[field_name].disabled = True  # Fully disable (recommended)
+        # if user and user.role == 'manager':
+        #     readonly_fields = ['name', 'code', 'category', 'unit', 'stock']
+        #     for field_name in readonly_fields:
+        #         self.fields[field_name].widget.attrs['readonly'] = True
+        #         self.fields[field_name].disabled = True
 
-            # Allow only these two price fields
-            self.fields['price_per_unit_retail'].widget.attrs.update({
-                'class': 'form-control border-success',
-                'placeholder': 'Retail Price (Editable by Manager)'
-            })
-            self.fields['price_per_unit_wholesale'].widget.attrs.update({
-                'class': 'form-control border-success',
-                'placeholder': 'Wholesale Price (Editable by Manager)'
-            })
+        #     self.fields['price_per_unit_retail'].widget.attrs.update({
+        #         'class': 'form-control border-success',
+        #         'placeholder': 'Retail Price (Editable by Manager)'
+        #     })
+        #     self.fields['price_per_unit_wholesale'].widget.attrs.update({
+        #         'class': 'form-control border-success',
+        #         'placeholder': 'Wholesale Price (Editable by Manager)'
+        #     })
 
+        # Everyone EXCEPT super_admin: Stock is readonly
+        # Only super_admin can edit stock
+        if user and user.role != 'super_admin':
+            self.fields['stock'].widget.attrs['readonly'] = True
+            self.fields['stock'].widget.attrs['class'] += ' bg-light'
+            # self.fields['stock'].help_text = "Only super admin can update stock."
+
+        # Super Admin: Full access (no restrictions)
+
+    def clean_code(self):
+        code = self.cleaned_data.get('code')
+        if not code:
+            raise ValidationError("Item code is required.")
+
+        code = code.strip()
+
+        # Normalize: uppercase + remove leading zeros after letters
+        import re
+        match = re.match(r'([A-Za-z]+)(0*)(\d*)', code.upper())
+        if match:
+            prefix = match.group(1)
+            number = match.group(3) or '0'  # if no digits, treat as 0
+            normalized = prefix + number
+        else:
+            # No number part (e.g., "ABC")
+            normalized = code.upper()
+
+        # Search for any existing code that normalizes to the same
+        existing_items = Item.objects.exclude(pk=self.instance.pk if self.instance.pk else 0)
+        
+        for item in existing_items:
+            existing_code = item.code.upper()
+            existing_match = re.match(r'([A-Za-z]+)(0*)(\d*)', existing_code)
+            if existing_match:
+                existing_prefix = existing_match.group(1)
+                existing_number = existing_match.group(3) or '0'
+                existing_normalized = existing_prefix + existing_number
+            else:
+                existing_normalized = existing_code
+
+            if normalized == existing_normalized:
+                raise ValidationError(
+                    f"Item code '{code}' is already in use. "
+                    "Codes like b1, B01, b001 are considered the same."
+                )
+
+        return code
+    
 class PurchaseForm(forms.ModelForm):
     class Meta:
         model = Purchase
@@ -406,6 +447,74 @@ class PurchaseDetailForm(forms.ModelForm):
 PurchaseDetailFormSet = inlineformset_factory(
     Purchase, PurchaseDetail, form=PurchaseDetailForm, extra=1, can_delete=True
 )
+
+class CustomerForm(forms.ModelForm):
+    whole_sale = forms.BooleanField(
+        required=False,
+        initial=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+
+    class Meta:
+        model = Customer
+        fields = ['customer_name', 'customer_phone', 'customer_address', 'gstin', 'whole_sale']
+
+    customer_name = forms.CharField(
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Customer Name',
+            'autocomplete': 'off'
+        }),
+        required=False
+    )
+    customer_phone = forms.CharField(
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Phone Number (10 digits)',
+            'autocomplete': 'off'
+        }),
+        required=False
+    )
+    customer_address = forms.CharField(
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Address'
+        }),
+        required=False
+    )
+    gstin = forms.CharField(
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'GSTIN (optional)'
+        }),
+        required=False  # Important: allow blank
+    )
+
+    def clean_customer_phone(self):
+        phone = self.cleaned_data.get('customer_phone', '').strip()
+        if phone:
+            if not phone.isdigit():
+                raise ValidationError("Phone number must contain only digits.")
+            if len(phone) != 10:
+                raise ValidationError("Phone number must be exactly 10 digits.")
+            if Customer.objects.filter(customer_phone=phone).exclude(pk=self.instance.pk).exists():
+                raise ValidationError("This phone number is already registered.")
+        return phone
+
+    def clean_gstin(self):
+        gstin = self.cleaned_data.get('gstin', '').strip().upper()
+
+        # If GSTIN is empty or None → allow it (no uniqueness check)
+        if not gstin:
+            return gstin
+
+        # Only check uniqueness if GSTIN is provided
+        if Customer.objects.filter(gstin__iexact=gstin).exclude(pk=self.instance.pk).exists():
+            raise ValidationError("This GSTIN is already registered.")
+
+        return gstin
+
 
 # === FINAL CustomerForm — NO MORE ERRORS! ===
 class CustomerDataForm(forms.Form):

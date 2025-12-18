@@ -33,4 +33,17 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const retailPrice = document.getElementById("id_price_per_unit_retail");
+    const wholesalePrice = document.getElementById("id_price_per_unit_wholesale");
+
+    if (retailPrice && wholesalePrice) {
+        retailPrice.addEventListener("input", function () {
+            wholesalePrice.value = retailPrice.value;
+        });
+    }
+});
+</script>
 {% endblock %}

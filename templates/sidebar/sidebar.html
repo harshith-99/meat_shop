@@ -76,6 +76,7 @@
                         <a class="collapse-item" href="{% url 'purchase_add' %}">Purchase Entry</a>
                         <a class="collapse-item" href="{% url 'purchase_list' %}">Purchase Details</a>
                         <a class="collapse-item" href="{% url 'supplier_list' %}">Supplier</a>
+                        
                         {% if request.user.role == 'admin' or request.user.role == 'super_admin' or request.user.role == 'manager'%}
                         
                         <a class="collapse-item" href="{% url 'supplier_pay' %}">Supplier Payment</a>
@@ -148,6 +149,23 @@
                 <div id="collapsePages5" class="collapse" aria-labelledby="headingPages" data-parent="#accordionSidebar">
                     <div class="bg-white py-2 collapse-inner rounded">
                         <a class="collapse-item" href="{% url 'retail_item_report' %}">Retail Item Report</a>
+                    </div>
+                </div>
+            </li>
+            {% endif %}
+
+            {% if request.user.role == 'admin' or request.user.role == 'super_admin' or request.user.role == 'manager'%}
+
+            <li class="nav-item">
+                <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapsePages6"
+                    aria-expanded="true" aria-controls="collapsePages6">
+                    <i class="fas fa-fw fa-folder"></i>
+                    <span>Customer</span>
+                </a>
+                
+                <div id="collapsePages6" class="collapse" aria-labelledby="headingPages" data-parent="#accordionSidebar">
+                    <div class="bg-white py-2 collapse-inner rounded">
+                        <a class="collapse-item" href="{% url 'customer_list' %}">customer</a>
                     </div>
                 </div>
             </li>

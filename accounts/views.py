@@ -7,7 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.db import transaction
 from decimal import Decimal, InvalidOperation
-from .forms import EmployeeLoginForm,PurchaseForm, PurchaseDetailFormSet, ItemCategoryForm, BranchForm, SupplierForm, ItemForm, RetailSalesForm, RetailSalesDetailFormSet, CustomerDataForm, WholesaleSalesForm, WholesaleSalesDetailFormSet,SupplierpayForm,EmployeForm,AttendanceInlineForm
+from .forms import EmployeeLoginForm,PurchaseForm, PurchaseDetailFormSet, ItemCategoryForm, BranchForm, SupplierForm, ItemForm, RetailSalesForm, RetailSalesDetailFormSet, CustomerDataForm, WholesaleSalesForm, WholesaleSalesDetailFormSet,SupplierpayForm,EmployeForm,AttendanceInlineForm,CustomerForm
 from .models import Purchase, PurchaseDetail, Branch, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance
 import logging
 from django.http import JsonResponse
@@ -19,6 +19,50 @@ from django.db import models
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
+
+@login_required(login_url='login')
+def customer_list(request):
+    customers = Customer.objects.filter(delete_status=False).order_by('customer_name', 'customer_phone')
+    return render(request, 'customer_list.html', {'customers': customers})
+
+@login_required(login_url='login')
+def customer_add(request):
+    if request.method == "POST":
+        form = CustomerForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Customer added successfully!")
+            return redirect('customer_list')
+        else:
+            messages.error(request, "Please correct the errors below.")
+    else:
+        form = CustomerForm()
+    return render(request, 'customer_add.html', {'form': form})
+
+@login_required(login_url='login')
+def customer_update(request, pk):
+    customer = get_object_or_404(Customer, pk=pk, delete_status=False)
+    if request.method == "POST":
+        form = CustomerForm(request.POST, instance=customer)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Customer updated successfully!")
+            return redirect('customer_list')
+        else:
+            messages.error(request, "Please correct the errors below.")
+    else:
+        form = CustomerForm(instance=customer)
+    return render(request, 'customer_add.html', {'form': form, 'customer': customer})
+
+@login_required(login_url='login')
+def customer_delete(request, pk):
+    customer = get_object_or_404(Customer, pk=pk, delete_status=False)
+    if request.method == "POST":
+        customer.delete_status = True
+        customer.save()
+        messages.success(request, "Customer deleted successfully.")
+        return redirect('customer_list')
+    return render(request, 'customer_delete.html', {'customer': customer})
 
 @login_required(login_url='login')
 def retail_item_report(request):
@@ -454,7 +498,7 @@ def item_add(request):
 
 @login_required(login_url='login')
 def item_list(request):
-    items = Item.objects.all()
+    items = Item.objects.all().order_by("code")
     return render(request, "item_list.html", {"items": items})
 
 
@@ -837,11 +881,17 @@ def retail_sales_add(request):
         if form.is_valid() and formset.is_valid() and customer_form.is_valid():
             receipt_no = form.cleaned_data['receipt_no'].strip()
 
-            if RetailSales.objects.filter(receipt_no__iexact=receipt_no).exists():
-                messages.error(request, f"Receipt number '{receipt_no}' already exists!")
+            # ONLY BLOCK IF AN ACTIVE (not deleted) RECEIPT EXISTS
+            if RetailSales.objects.filter(
+                receipt_no__iexact=receipt_no,
+                delete_status=False
+            ).exists():
+                messages.error(request, f"Receipt number '{receipt_no}' is already in use (active sale exists)!")
                 return render(request, "retail_sales_add.html", {
-                    'form': form, 'formset': formset,
-                    'customer_form': customer_form, 'is_admin_like': is_admin_like
+                    'form': form,
+                    'formset': formset,
+                    'customer_form': customer_form,
+                    'is_admin_like': is_admin_like
                 })
 
             with transaction.atomic():
@@ -1102,7 +1152,7 @@ def wholesale_sales_add(request):
             receipt_no = form.cleaned_data['receipt_no'].strip().upper()
 
             # Unique receipt check
-            if WholesaleSales.objects.filter(receipt_no__iexact=receipt_no).exists():
+            if WholesaleSales.objects.filter(receipt_no__iexact=receipt_no,delete_status=False).exists():
                 messages.error(request, f"Receipt No '{receipt_no}' already used!")
                 return render(request, "wholesale_sales_add.html", {
                     'form': form, 'formset': formset, 'customer_form': customer_form,

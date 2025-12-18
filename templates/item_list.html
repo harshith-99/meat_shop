@@ -7,9 +7,15 @@
         <a href="{% url 'item_add' %}" class="btn btn-success mb-3">+ Add Item</a>
     {% endif %}
 
+<!-- ONLY SHOW SUCCESS MESSAGES -->
     {% for message in messages %}
-     <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+        {% if message.tags == 'success' %}
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            {{ message }}
+        </div>
+        {% endif %}
     {% endfor %}
+    
     <table class="table table-bordered">
         <thead>
             <tr>

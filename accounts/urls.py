@@ -72,6 +72,11 @@ urlpatterns = [
     path('api/search_customers/', views.search_customers, name='search_customers'),
     path('api/item-details/<int:item_id>/', views.item_details, name='item_details'),
 
+    path('customers/', views.customer_list, name='customer_list'),
+    path('customers/add/', views.customer_add, name='customer_add'),
+    path('customers/update/<int:pk>/', views.customer_update, name='customer_update'),
+    path('customers/delete/<int:pk>/', views.customer_delete, name='customer_delete'),
+
     #create login
     # urls.py
     path('employee-login/create/', views.employee_login_create, name='employee_login_create'),

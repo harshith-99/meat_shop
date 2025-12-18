@@ -23,18 +23,20 @@
                         </select>
                     </div>
                     {% endif %}
-                    <div class="col-md-2">
-                        <label class="form-label">From Date</label>
+                    <div class="col-md-2" style="display: none;">
+                        <label class="form-label" >From Date</label>
                         <input type="date" name="from_date" value="{{ from_date_str }}" class="form-control form-control-sm">
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-md-2" style="display: none;">
                         <label class="form-label">To Date</label>
                         <input type="date" name="to_date" value="{{ to_date_str }}" class="form-control form-control-sm">
                     </div>
+                    {% if is_admin_like %}
                     <div class="col">
                         <button type="submit" class="btn btn-primary btn-sm">Filter</button>
                         <a href="{% url 'retail_sales_list' %}" class="btn btn-secondary btn-sm">Today</a>
                     </div>
+                    {% endif %}
                 </div>
             </form>
         </div>
@@ -48,9 +50,9 @@
                     <strong>Branch:</strong> {{ selected_branch_name }}
                 </div>
                 <div class="col">
-                    <strong>From:</strong> {{ from_date|date:"d-m-Y" }}
+                    <strong>Date :</strong> {{ from_date|date:"d-m-Y" }}
                 </div>
-                <div class="col">
+                <div class="col" style="display: none;">
                     <strong>To:</strong> {{ to_date|date:"d-m-Y" }}
                 </div>
             </div>

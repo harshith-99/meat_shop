@@ -116,9 +116,9 @@ class Customer(models.Model):
         max_length=15,
         blank=True,
         null=True,
-        unique=True  # Only unique when not blank
     )
-
+    whole_sale = models.BooleanField(default=False)
+    delete_status = models.BooleanField(default=False)
     def __str__(self):
         return self.customer_name or self.customer_phone or "Customer"
     
@@ -142,7 +142,7 @@ class Employe(models.Model):
         return self.name
 
 class RetailSales(models.Model):
-    receipt_no = models.CharField(max_length=20, unique=True)
+    receipt_no = models.CharField(max_length=20)
     sales_date = models.DateField()
     created_date = models.DateTimeField(auto_now_add=True)
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT)
@@ -172,7 +172,7 @@ class RetailSalesDetails(models.Model):
     total_amount = models.DecimalField(max_digits=12, decimal_places=3,default='0.000')
     
 class WholesaleSales(models.Model):
-    receipt_no = models.CharField(max_length=20, unique=True)
+    receipt_no = models.CharField(max_length=20)
     sales_date = models.DateField()
     created_date = models.DateTimeField(auto_now_add=True)
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT)
