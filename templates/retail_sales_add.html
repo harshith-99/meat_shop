@@ -202,7 +202,7 @@
 // Auto change payment mode when take-away employee is selected
 $(document).on('change', '#id_take_amay_employee', function() {
     if ($(this).val() && $(this).val() !== '') {
-        $('#id_payment_mode').val('credit');
+        $('#id_payment_mode').val('pending');
     }
 });
 

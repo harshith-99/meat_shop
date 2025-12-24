@@ -99,7 +99,11 @@
 <body>
     {% load humanize %}
     {% load static %}
-
+    {% if request.GET.duplicate %}
+    <div class="header">
+        <h4>DUPLICATE BILL</h4>
+    </div>
+    {% endif %}
     <div class="header">
         <h3>JAAN CHICKEN'S</h3>
         <b>MULLAKADU 4TH MAIL • AKASHBHAVANA<br>

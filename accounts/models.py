@@ -156,7 +156,7 @@ class RetailSales(models.Model):
     delete_status = models.BooleanField(default=False)
     payment_mode = models.CharField(
         max_length=20,
-        choices=(('cash', 'Cash'), ('upi', 'UPI'),('cheque', 'Cheque'),('online', 'Online'), ('credit', 'Credit')),
+        choices=(('cash', 'Cash'), ('upi', 'UPI'),('cheque', 'Cheque'),('online', 'Online'), ('pending', 'Pending')),
         default='cash'
     )
     take_amay_employee = models.ForeignKey(Employe, on_delete=models.PROTECT, null=True, blank=True)

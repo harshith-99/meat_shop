@@ -607,7 +607,7 @@ class RetailSalesForm(forms.ModelForm):
         required=False
     )
     payment_mode = forms.ChoiceField(
-        choices=(('cash', 'Cash'), ('upi', 'UPI'),('cheque', 'Cheque'),('online', 'Online'), ('credit', 'Credit')),
+        choices=(('cash', 'Cash'), ('upi', 'UPI'),('cheque', 'Cheque'),('online', 'Online'), ('pending', 'Pending')),
         widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'})
     )
     take_amay_employee = forms.ModelChoiceField(

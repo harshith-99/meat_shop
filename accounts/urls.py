@@ -50,6 +50,7 @@ urlpatterns = [
     path('sales/retail/list/', views.retail_sales_list, name='retail_sales_list'),
     path('sales/retail/receipt/<int:pk>/', views.retail_receipt, name='retail_receipt'),
     path('sales/retail/delete/<int:pk>/', views.retail_sales_delete, name='retail_sales_delete'),
+    path('sales/retail/pay-credit/<int:pk>/', views.retail_pay_credit, name='retail_pay_credit'),
 
     path('retail-item-report/', views.retail_item_report, name='retail_item_report'),
 

@@ -21,6 +21,23 @@ from decimal import Decimal
 logger = logging.getLogger(__name__)
 
 @login_required(login_url='login')
+def retail_pay_credit(request, pk):
+    sale = get_object_or_404(RetailSales, pk=pk, delete_status=False)
+
+    if request.method == "POST":
+        payment_mode = request.POST.get('payment_mode')
+        if payment_mode and payment_mode != 'pending':
+            sale.payment_mode = payment_mode
+            sale.save()
+            messages.success(request, f"Pending bill {sale.receipt_no} marked as paid via {payment_mode}!")
+        else:
+            messages.error(request, "Please select a valid payment mode.")
+        return redirect('retail_sales_list')
+
+    # If GET (shouldn't happen), redirect
+    return redirect('retail_sales_list')
+
+@login_required(login_url='login')
 def customer_list(request):
     customers = Customer.objects.filter(delete_status=False).order_by('customer_name', 'customer_phone')
     return render(request, 'customer_list.html', {'customers': customers})
@@ -982,24 +999,29 @@ def retail_sales_add(request):
 from django.db.models import Q
 from datetime import date
 
-@login_required
+@login_required(login_url='login')
 def retail_sales_list(request):
     is_admin_like = request.user.role in ['super_admin', 'admin']
     
-    branch_id = request.GET.get('branch')  # Can be "", "1", None
+    # === FILTER PARAMETERS ===
+    branch_id = request.GET.get('branch')
     from_date_str = request.GET.get('from_date')
     to_date_str = request.GET.get('to_date')
 
     today = date.today()
-    from_date = from_date_str or today.strftime('%Y-%m-%d')
-    to_date = to_date_str or today.strftime('%Y-%m-%d')
 
+    # Default to today if no date provided
+    from_date_str = from_date_str or today.strftime('%Y-%m-%d')
+    to_date_str = to_date_str or today.strftime('%Y-%m-%d')
+
+    # Parse dates safely
     try:
-        from_date = datetime.strptime(from_date, '%Y-%m-%d').date()
+        from_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
     except ValueError:
         from_date = today
+
     try:
-        to_date = datetime.strptime(to_date, '%Y-%m-%d').date()
+        to_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
     except ValueError:
         to_date = today
 
@@ -1007,6 +1029,21 @@ def retail_sales_list(request):
     if branch_id and branch_id.isdigit():
         selected_branch = int(branch_id)
 
+    # === 1. PENDING CREDIT BILLS (Always show, no date filter) ===
+    credit_sales = RetailSales.objects.filter(
+        payment_mode='pending',
+        delete_status=False
+    ).select_related('branch', 'customer', 'added_by')
+
+    if not is_admin_like:
+        credit_sales = credit_sales.filter(branch=request.user.branch)
+    else:
+        if selected_branch is not None:
+            credit_sales = credit_sales.filter(branch_id=selected_branch)
+
+    credit_sales = credit_sales.order_by('-sales_date')
+
+    # === 2. REGULAR FILTERED SALES (With date & branch filter) ===
     sales = RetailSales.objects.filter(
         delete_status=False,
         sales_date__gte=from_date,
@@ -1015,8 +1052,12 @@ def retail_sales_list(request):
 
     # Apply branch filter
     if not is_admin_like:
-        sales = sales.filter(branch=request.user.branch)
-        selected_branch_name = request.user.branch.branch_name
+        if request.user.branch:
+            sales = sales.filter(branch=request.user.branch)
+            selected_branch_name = request.user.branch.branch_name
+        else:
+            sales = sales.none()
+            selected_branch_name = "No Branch Assigned"
     else:
         if selected_branch is not None:
             sales = sales.filter(branch_id=selected_branch)
@@ -1025,25 +1066,55 @@ def retail_sales_list(request):
             try:
                 selected_branch_name = Branch.objects.get(branch_id=selected_branch).branch_name
             except Branch.DoesNotExist:
-                pass
+                selected_branch_name = "Unknown Branch"
 
     sales = sales.order_by('-sales_date')
 
+    # === 3. GRAND TOTAL & PAYMENT MODE BREAKDOWN (Only for filtered sales) ===
+    total_grand = sales.aggregate(total=Sum('grand_total'))['total'] or Decimal('0.00')
+
+    payment_mode_totals = sales.values('payment_mode').annotate(
+        total=Sum('grand_total')
+    ).order_by('payment_mode')
+
+    # Convert to display-friendly dict
+    mode_display = {
+        'cash': 'Cash',
+        'upi': 'UPI',
+        'online': 'Online',
+        'cheque': 'Cheque',
+        'pending': 'Pending',
+    }
+    payment_mode_totals_dict = {}
+    for item in payment_mode_totals:
+        mode = item['payment_mode']
+        display_name = mode_display.get(mode, mode.title())
+        payment_mode_totals_dict[display_name] = item['total'] or Decimal('0.00')
+
+    print(payment_mode_totals_dict)
+    
+    # === CONTEXT ===
     context = {
         'sales': sales,
+        'credit_sales': credit_sales,  # Pending credit bills
+        'total_grand': total_grand,
+        'payment_mode_totals': payment_mode_totals_dict,
+
         'branches': Branch.objects.all() if is_admin_like else [],
         'is_admin_like': is_admin_like,
-        'selected_branch': selected_branch,  # int or None
-        # For <input type="date">
-        'from_date_str': request.GET.get('from_date', today.strftime('%Y-%m-%d')),
-        'to_date_str':   request.GET.get('to_date',   today.strftime('%Y-%m-%d')),
-
-        # For display with |date filter
-        'from_date': from_date,   # real date object
-        'to_date':   to_date,     # real date object
+        'selected_branch': selected_branch,
         'selected_branch_name': selected_branch_name,
+
+        # For date inputs
+        'from_date_str': from_date_str,
+        'to_date_str': to_date_str,
+
+        # For display
+        'from_date': from_date,
+        'to_date': to_date,
         'today': today.strftime('%Y-%m-%d'),
     }
+
     return render(request, 'retail_sales_list.html', context)
 
 @login_required
