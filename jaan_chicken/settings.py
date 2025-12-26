@@ -137,3 +137,17 @@ STATICFILES_DIRS = [
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Make session cookie expire when browser is closed
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+
+# Optional: Set a short session timeout (e.g., 30 minutes of inactivity)
+SESSION_COOKIE_AGE = 1800  # 1800 seconds = 30 minutes
+
+# Prevent session cookie from being saved permanently
+SESSION_SAVE_EVERY_REQUEST = True  # Recommended with short expiry
+
+# Extra security (recommended)
+SESSION_COOKIE_SECURE = True        # Only send over HTTPS (set False in dev)
+SESSION_COOKIE_HTTPONLY = True      # Prevent JS access
+SESSION_COOKIE_SAMESITE = 'Lax'     # or 'Strict' for max security

@@ -165,7 +165,7 @@
                     <tbody>
                         {% for mode, amount in payment_mode_totals.items %}
                         <tr>
-                            <td class="text-start fw-bold ps-4">{{ mode.get_payment_mode_display }}</td>
+                            <td class="text-start fw-bold ps-4">{{ mode }}</td>
                             <td class="text-end pe-4">₹{{ amount|floatformat:2|intcomma }}</td>
                         </tr>
                         {% endfor %}
