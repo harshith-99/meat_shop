@@ -52,7 +52,7 @@ urlpatterns = [
     path('sales/retail/delete/<int:pk>/', views.retail_sales_delete, name='retail_sales_delete'),
     path('sales/retail/pay-credit/<int:pk>/', views.retail_pay_credit, name='retail_pay_credit'),
 
-    path('retail-item-report/', views.retail_item_report, name='retail_item_report'),
+    
 
     # Wholesale Sales URLs
     path('wholesale-sales/add/', views.wholesale_sales_add, name='wholesale_sales_add'),
@@ -81,5 +81,13 @@ urlpatterns = [
     #create login
     # urls.py
     path('employee-login/create/', views.employee_login_create, name='employee_login_create'),
+
+    #Reports
+    path('retail-item-report/', views.retail_item_report, name='retail_item_report'),
+    path('wholesale-item-report/', views.wholesale_item_report, name='wholesale_item_report'),
+    path('wholesale-payments/', views.wholesale_payment_list, name='wholesale_payment_list'),
+
+    path('wholesale-payment/add/', views.wholesale_payment_add, name='wholesale_payment_add'),
+    
 ]
 

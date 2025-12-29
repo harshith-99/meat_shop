@@ -238,3 +238,23 @@ class Attendance(models.Model):
     def __str__(self):
         return f"{self.employee.name} – {self.get_status_display()} ({self.date})"
 
+class WholesalePayment(models.Model):
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, limit_choices_to={'whole_sale': True})
+    payment_date = models.DateField()
+    created_date = models.DateTimeField(auto_now_add=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_mode = models.CharField(
+        max_length=20,
+        choices=(('cash', 'Cash'), ('upi', 'UPI'), ('online', 'Online'), ('cheque', 'Cheque')),
+        default='cash'
+    )
+    description = models.TextField(blank=True, null=True)
+    delete_status = models.BooleanField(default=False)
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, null=True, blank=True)
+    added_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+
+    def __str__(self):
+        return f"Payment ₹{self.amount} - {self.customer.customer_name} ({self.payment_date})"
+
+    class Meta:
+        ordering = ['-payment_date']

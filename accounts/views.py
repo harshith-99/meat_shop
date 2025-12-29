@@ -7,8 +7,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.db import transaction
 from decimal import Decimal, InvalidOperation
-from .forms import EmployeeLoginForm,PurchaseForm, PurchaseDetailFormSet, ItemCategoryForm, BranchForm, SupplierForm, ItemForm, RetailSalesForm, RetailSalesDetailFormSet, CustomerDataForm, WholesaleSalesForm, WholesaleSalesDetailFormSet,SupplierpayForm,EmployeForm,AttendanceInlineForm,CustomerForm
-from .models import Purchase, PurchaseDetail, Branch, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance
+from .forms import EmployeeLoginForm,PurchaseForm, PurchaseDetailFormSet, ItemCategoryForm, BranchForm, SupplierForm, ItemForm, RetailSalesForm, RetailSalesDetailFormSet, CustomerDataForm, WholesaleSalesForm, WholesaleSalesDetailFormSet,SupplierpayForm,EmployeForm,AttendanceInlineForm,CustomerForm,WholesalePaymentForm
+from .models import Purchase, PurchaseDetail, Branch, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance,WholesalePayment
 import logging
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
@@ -19,6 +19,180 @@ from django.db import models
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
+
+@login_required
+def wholesale_payment_add(request):
+    if request.method == "POST":
+        form = WholesalePaymentForm(request.POST, user=request.user)
+        if form.is_valid():
+            payment = form.save(commit=False)
+            payment.added_by = request.user
+            if not payment.branch and request.user.branch:
+                payment.branch = request.user.branch
+            payment.save()
+            messages.success(request, f"Payment of ₹{payment.amount} recorded for {payment.customer}!")
+            return redirect('wholesale_payment_list')
+    else:
+        form = WholesalePaymentForm(user=request.user)
+
+    return render(request, "wholesale_payment_add.html", {"form": form})
+
+@login_required
+def wholesale_payment_list(request):
+    user = request.user
+    is_admin_like = user.role in ['admin', 'super_admin']
+
+    customer_id = request.GET.get('customer')
+    from_date_str = request.GET.get('from_date')
+    to_date_str = request.GET.get('to_date')
+
+    payments = WholesalePayment.objects.filter(delete_status=False).select_related('customer', 'branch', 'added_by')
+
+    if from_date_str:
+        try:
+            from_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
+            payments = payments.filter(payment_date__gte=from_date)
+        except:
+            pass
+    if to_date_str:
+        try:
+            to_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
+            payments = payments.filter(payment_date__lte=to_date)
+        except:
+            pass
+    if customer_id:
+        payments = payments.filter(customer_id=customer_id)
+
+    if not is_admin_like and user.branch:
+        payments = payments.filter(branch=user.branch)
+
+    payments = payments.order_by('-payment_date')
+
+    # Customer balance calculation
+    customers = Customer.objects.filter(whole_sale=True, delete_status=False)
+    if not is_admin_like and user.branch:
+        customers = customers.filter(wholesalesales__branch=user.branch).distinct()
+
+    customer_stats = []
+    for cust in customers:
+        total_sales = WholesaleSales.objects.filter(
+            customer=cust,
+            delete_status=False
+        ).aggregate(total=Sum('grand_total'))['total'] or Decimal('0.00')
+
+        total_paid = WholesalePayment.objects.filter(
+            customer=cust,
+            delete_status=False
+        ).aggregate(paid=Sum('amount'))['paid'] or Decimal('0.00')
+
+        balance = total_sales - total_paid
+        if balance > 0:  # Only show if pending
+            customer_stats.append({
+                'customer': cust,
+                'total_sales': total_sales,
+                'total_paid': total_paid,
+                'balance': balance
+            })
+
+    context = {
+        'payments': payments,
+        'customers': Customer.objects.filter(whole_sale=True, delete_status=False),
+        'customer_stats': customer_stats,
+        'selected_customer': customer_id,
+        'is_admin_like': is_admin_like,
+    }
+    return render(request, 'wholesale_payment_list.html', context)
+
+@login_required(login_url='login')
+def wholesale_item_report(request):
+    is_admin_like = request.user.role in ['super_admin', 'admin']
+    
+    # Get filter parameters
+    branch_id = request.GET.get('branch')
+    from_date_str = request.GET.get('from_date')
+    to_date_str = request.GET.get('to_date')
+
+    today = date.today()
+    from_date = from_date_str or today.strftime('%Y-%m-%d')
+    to_date = to_date_str or today.strftime('%Y-%m-%d')
+
+    # Parse dates safely
+    try:
+        from_date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+    except ValueError:
+        from_date_obj = today
+        from_date = today.strftime('%Y-%m-%d')
+
+    try:
+        to_date_obj = datetime.strptime(to_date, '%Y-%m-%d').date()
+    except ValueError:
+        to_date_obj = today
+        to_date = today.strftime('%Y-%m-%d')
+
+    # Base queryset - only wholesale sales (not retail)
+    details_qs = WholesaleSalesDetails.objects.filter(
+        sales__delete_status=False,
+        sales__sales_date__gte=from_date_obj,
+        sales__sales_date__lte=to_date_obj
+    ).select_related(
+        'sales__customer', 'sales__branch', 'item'
+    )
+
+    # Apply branch filter
+    selected_branch = None
+    if is_admin_like:
+        if branch_id and branch_id.isdigit():
+            details_qs = details_qs.filter(sales__branch_id=branch_id)
+            selected_branch = Branch.objects.filter(branch_id=branch_id).first()
+    else:
+        # Non-admin: only their branch
+        if request.user.branch:
+            details_qs = details_qs.filter(sales__branch=request.user.branch)
+            selected_branch = request.user.branch
+        else:
+            details_qs = details_qs.none()
+
+    # Group by Customer → Item
+    report_data = {}
+    for detail in details_qs:
+        customer = detail.sales.customer
+        customer_name = customer.customer_name or "Unknown Customer"
+        item = detail.item
+
+        if customer_name not in report_data:
+            report_data[customer_name] = {
+                'customer': customer,
+                'items': {}
+            }
+
+        item_key = item.code
+        if item_key not in report_data[customer_name]['items']:
+            report_data[customer_name]['items'][item_key] = {
+                'code': item.code,
+                'name': item.name,
+                'total_qty': 0,
+                'total_net_weight': Decimal('0.00'),
+                'total_amount': Decimal('0.00')
+            }
+
+        item_data = report_data[customer_name]['items'][item_key]
+        item_data['total_qty'] += detail.qty
+        item_data['total_net_weight'] += detail.net_weight or Decimal('0.00')
+        item_data['total_amount'] += detail.total_amount or Decimal('0.00')
+
+    # Sort customers alphabetically
+    sorted_report = dict(sorted(report_data.items()))
+
+    context = {
+        'report_data': sorted_report,
+        'is_admin_like': is_admin_like,
+        'branches': Branch.objects.all() if is_admin_like else [],
+        'selected_branch': selected_branch,
+        'from_date': from_date,
+        'to_date': to_date,
+        'today': today.strftime('%Y-%m-%d'),
+    }
+    return render(request, 'wholesale_item_report.html', context)
 
 @login_required(login_url='login')
 def retail_pay_credit(request, pk):
@@ -1235,6 +1409,11 @@ def wholesale_sales_add(request):
                 customer_data = customer_form.cleaned_data
                 customer, created = get_or_create_customer(customer_data, customer_id)
 
+                # CRITICAL FIX: Force wholesale flag
+                if created or not customer.whole_sale:
+                    customer.whole_sale = True
+                    customer.save()
+
                 # Update existing customer if fields changed
                 if not created:
                     updated = False
@@ -1372,20 +1551,39 @@ def item_by_code(request):
 
 @require_GET
 def search_customers(request):
-    q = request.GET.get('q', '')
-    type_ = request.GET.get('type', 'name')
-    if type_ == 'phone':
-        customers = Customer.objects.filter(customer_phone__icontains=q)
-    else:
-        customers = Customer.objects.filter(customer_name__icontains=q)
+    q = request.GET.get('q', '').strip()
+    type_ = request.GET.get('type', 'name')  # 'name' or 'phone'
+    context = request.GET.get('context', '')  # 'wholesale' or 'retail'
+
+    # Base queryset - ALWAYS define first
+    customers = Customer.objects.filter(delete_status=False)
+
+    # Apply context filter
+    if context == 'wholesale':
+        customers = customers.filter(whole_sale=True)
+    elif context == 'retail':
+        customers = customers.filter(whole_sale=False)
+    # Else: show all (fallback)
+
+    # Apply search
+    if q:
+        if type_ == 'phone':
+            customers = customers.filter(customer_phone__icontains=q)
+        else:
+            customers = customers.filter(customer_name__icontains=q)
+
+    # Limit results for performance
+    customers = customers[:20]
+
     data = [
         {
             'id': c.id,
-            'name': c.customer_name,
-            'phone': c.customer_phone,
-            'address': c.customer_address,
-            'gstin': c.gstin
-        } for c in customers
+            'name': c.customer_name or "Unnamed Customer",
+            'phone': c.customer_phone or "",
+            'address': c.customer_address or "",
+            'gstin': c.gstin or ""
+        }
+        for c in customers
     ]
     return JsonResponse(data, safe=False)
 

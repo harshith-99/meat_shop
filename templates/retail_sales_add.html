@@ -285,7 +285,7 @@ document.addEventListener("DOMContentLoaded", function() {
         $(this).autocomplete({
             source: function(request, response) {
                 const field = this.element.attr('id').includes('phone') ? 'phone' : 'name';
-                $.get('/accounts/api/search_customers/', {type: field, q: request.term}, function(data) {
+                $.get('/accounts/api/search_customers/', {type: field, q: request.term,context: 'retail'}, function(data) {
                     response(data.map(c => ({
                         label: field === 'phone' ? `${c.phone} - ${c.name}` : `${c.name} - ${c.phone}`,
                         value: field === 'phone' ? c.phone : c.name,

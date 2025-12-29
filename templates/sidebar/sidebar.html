@@ -74,13 +74,10 @@
                 <div id="collapsePages" class="collapse" aria-labelledby="headingPages" data-parent="#accordionSidebar">
                     <div class="bg-white py-2 collapse-inner rounded">
                         <a class="collapse-item" href="{% url 'purchase_add' %}">Purchase Entry</a>
-                        <a class="collapse-item" href="{% url 'purchase_list' %}">Purchase Details</a>
                         <a class="collapse-item" href="{% url 'supplier_list' %}">Supplier</a>
                         
                         {% if request.user.role == 'admin' or request.user.role == 'super_admin' or request.user.role == 'manager'%}
-                        
                         <a class="collapse-item" href="{% url 'supplier_pay' %}">Supplier Payment</a>
-                        <a class="collapse-item" href="{% url 'supplier_payment_list' %}">Supplier Payment List</a>
                         {% endif %}
                         
                         
@@ -116,6 +113,7 @@
                         <a class="collapse-item" href="{% url 'retail_sales_list' %}">Retail Sales List</a>
                         <a class="collapse-item" href="{% url 'wholesale_sales_add' %}">Wholesale Sales</a>
                         <a class="collapse-item" href="{% url 'wholesale_sales_list' %}">Wholesale List</a>
+                        <a class="collapse-item" href="{% url 'wholesale_payment_add' %}">Wholesale Payment</a>
                     </div>
                 </div>
             </li>
@@ -149,7 +147,12 @@
                 <div id="collapsePages5" class="collapse" aria-labelledby="headingPages" data-parent="#accordionSidebar">
                     <div class="bg-white py-2 collapse-inner rounded">
                         <a class="collapse-item" href="{% url 'retail_item_report' %}">Retail Item Report</a>
+                        <a class="collapse-item" href="{% url 'wholesale_item_report' %}">Whole Sale Item Report</a>
+                        <a class="collapse-item" href="{% url 'purchase_list' %}">Purchase Report</a>
+                        <a class="collapse-item" href="{% url 'supplier_payment_list' %}">Supplier Payment Report</a>
+                        <a class="collapse-item" href="{% url 'wholesale_payment_list' %}">Wholesale Payment Report</a>
                     </div>
+                    
                 </div>
             </li>
             {% endif %}

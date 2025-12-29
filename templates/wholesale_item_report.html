@@ -1,0 +1,114 @@
+{% load static %}
+{% include "sidebar/sidebar.html" %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">Wholesale Item-Wise Sales Report</h1>
+
+    <!-- Filters Card -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 bg-success text-white">
+            <h6 class="m-0 font-weight-bold">Filter Report</h6>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">From Date</label>
+                    <input type="date" name="from_date" class="form-control" value="{{ from_date }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">To Date</label>
+                    <input type="date" name="to_date" class="form-control" value="{{ to_date }}">
+                </div>
+
+                {% if is_admin_like %}
+                <div class="col-md-3">
+                    <label class="form-label">Branch</label>
+                    <select name="branch" class="form-control">
+                        <option value="">-- All Branches --</option>
+                        {% for branch in branches %}
+                        <option value="{{ branch.branch_id }}" {% if selected_branch.branch_id == branch.branch_id %}selected{% endif %}>
+                            {{ branch.branch_name }} ({{ branch.alias }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% else %}
+                {% if selected_branch %}
+                <div class="col-md-3">
+                    <label class="form-label">Your Branch</label>
+                    <input type="text" class="form-control" value="{{ selected_branch.branch_name }} ({{ selected_branch.alias }})" readonly>
+                    <small class="text-muted">You can only view your branch data</small>
+                </div>
+                {% endif %}
+                {% endif %}
+
+                <div class="col-md-3 align-self-end">
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-filter"></i> Apply Filter
+                    </button>
+                    <a href="{% url 'wholesale_item_report' %}" class="btn btn-secondary">Clear</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Results Info -->
+    <div class="alert alert-info">
+        Showing wholesale sales from <strong>{{ from_date }}</strong> to <strong>{{ to_date }}</strong>
+        {% if selected_branch %}
+            for <strong>{{ selected_branch.branch_name }}</strong>
+        {% elif is_admin_like %}
+            <strong>(All Branches)</strong>
+        {% endif %}
+        &nbsp; | &nbsp; Total Customers: <strong>{{ report_data|length }}</strong>
+    </div>
+
+    <!-- Report by Customer -->
+    {% for customer_name, data in report_data.items %}
+    <div class="card shadow mb-4 border-left-success">
+        <div class="card-header py-3 bg-success text-white">
+            <h6 class="m-0 font-weight-bold">
+                Customer: {{ customer_name }}
+                {% if data.customer.customer_phone %} ({{ data.customer.customer_phone }}) {% endif %}
+            </h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Item Code</th>
+                            <th>Item Name</th>
+                            <th>Total Qty</th>
+                            <th>Total Net Weight (kg)</th>
+                            <th>Total Amount (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item_code, item in data.items.items %}
+                        <tr>
+                            <td><strong>{{ item.code }}</strong></td>
+                            <td>{{ item.name }}</td>
+                            <td>{{ item.total_qty }}</td>
+                            <td>{{ item.total_net_weight|floatformat:2 }}</td>
+                            <td><strong>₹{{ item.total_amount|floatformat:2|intcomma }}</strong></td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">No items purchased</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="alert alert-warning text-center">
+        No wholesale sales found for the selected period.
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

@@ -1,5 +1,5 @@
 from django import forms
-from .models import CustomUser,Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance
+from .models import CustomUser,Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance,WholesalePayment
 from django.forms import modelformset_factory
 from django.forms import inlineformset_factory
 from django.core.exceptions import ValidationError
@@ -131,6 +131,8 @@ class SupplierpayForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.user = user
 
+        self.fields['branch'].queryset = Branch.objects.all()
+
         # Auto-fill & restrict branch for non-admin users
         if user and user.role in ['staff', 'manager'] and user.branch:
             self.fields['branch'].initial = user.branch
@@ -139,12 +141,13 @@ class SupplierpayForm(forms.ModelForm):
             # Force branch value even on validation error
             if self.data:
                 mutable_data = self.data.copy()
-                mutable_data[f'{self.prefix}-branch' if self.prefix else 'branch'] = str(user.branch.id)
+                mutable_data[f'{self.prefix}-branch' if self.prefix else 'branch'] = str(user.branch.pk)
                 self.data = mutable_data
 
         # Admin can choose any branch
         elif user and user.role in ['admin', 'super_admin']:
             self.fields['branch'].widget = forms.Select(attrs={'class': 'form-control'})
+            self.fields['branch'].queryset = Branch.objects.all().order_by('branch_name')
             self.fields['branch'].required = True
             self.fields['branch'].empty_label = "-- Select Branch --"
         else:
@@ -614,7 +617,8 @@ class RetailSalesForm(forms.ModelForm):
         queryset=Employe.objects.all(),
         widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'}),
         required=False,
-        label="Take Away"
+        label="Take Away",
+        empty_label="Store Customer"
     )
 
     def __init__(self, *args, user=None, **kwargs):
@@ -876,3 +880,66 @@ class AttendanceInlineForm(forms.ModelForm):
         if not status and self.initial.get('status'):
             return self.initial['status']
         return status
+    
+class WholesalePaymentForm(forms.ModelForm):
+    customer = forms.ModelChoiceField(
+        queryset=Customer.objects.filter(whole_sale=True, delete_status=False),
+        widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+        required=True,
+        empty_label="-- Select Wholesale Customer --"
+    )
+    payment_date = forms.DateField(
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        required=True
+    )
+    amount = forms.DecimalField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+        required=True,
+        min_value=Decimal('0.01')
+    )
+    payment_mode = forms.ChoiceField(
+        choices=(('cash', 'Cash'), ('upi', 'UPI'), ('online', 'Online'), ('cheque', 'Cheque')),
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        required=True
+    )
+    description = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'placeholder': 'Description (optional)',
+            'rows': 3
+        })
+    )
+    branch = forms.ModelChoiceField(
+        queryset=Branch.objects.all(),
+        widget=forms.HiddenInput(),
+        required=False
+    )
+
+    class Meta:
+        model = WholesalePayment
+        fields = ['customer', 'payment_date', 'amount', 'payment_mode', 'description', 'branch']
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+        # Set queryset for branch
+        self.fields['branch'].queryset = Branch.objects.all()
+
+        # Non-admin: auto-set branch
+        if user and user.role in ['staff', 'manager'] and user.branch:
+            self.fields['branch'].initial = user.branch
+            self.fields['branch'].widget = forms.HiddenInput()
+
+            if self.data:
+                mutable_data = self.data.copy()
+                mutable_data[f'{self.prefix}-branch' if self.prefix else 'branch'] = str(user.branch.pk)
+                self.data = mutable_data
+
+        # Admin: show dropdown
+        elif user and user.role in ['admin', 'super_admin']:
+            self.fields['branch'].widget = forms.Select(attrs={'class': 'form-control'})
+            self.fields['branch'].required = True
+            self.fields['branch'].queryset = Branch.objects.all().order_by('branch_name')
+            self.fields['branch'].empty_label = "-- Select Branch --"
