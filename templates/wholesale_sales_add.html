@@ -136,7 +136,26 @@
                 </table>
 
                 <div class="row mt-3">
-                    <div class="col-md-3">{{ form.tax_amount.label_tag }} {{ form.tax_amount }}</div>
+                    <div class="col-md-3">
+                        {{ form.tax_amount.label_tag }} {{ form.tax_amount }}
+                    </div>
+                    <div class="col-md-3">
+                        {{ form.total.label_tag }}
+                        <span class="text-danger">{{ form.total.errors|join:", " }}</span>
+                        {{ form.total }}
+                    </div>
+                    <div class="col-md-3 position-relative">
+                        {{ form.discount.label_tag }}
+                        <span class="text-danger">{{ form.discount.errors|join:", " }}</span>
+                        <div class="input-group">
+                            {{ form.discount }}
+                            <!-- <div class="input-group-append">
+                                <span class="input-group-text">₹</span>
+                            </div> -->
+                        </div>
+                        <!-- <small class="text-muted">Max ₹10 without key</small> -->
+                    </div>
+                    
                     <div class="col-md-3">{{ form.payment_mode.label_tag }} {{ form.payment_mode }}</div>
                     <div class="col-md-3" style="display: none;">{{ form.paid_amount.label_tag }} {{ form.paid_amount }}</div>
                     <div class="col-md-3">{{ form.grand_total.label_tag }} {{ form.grand_total }}</div>
@@ -152,11 +171,37 @@
     </form>
 </div>
 
+<!-- Secret Key Modal -->
+<div class="modal fade" id="secretKeyModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title">High Discount Approval</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Enter secret key to apply more discount</p>
+                <input type="password" id="secretKeyInput" class="form-control" placeholder="Enter key">
+                <!-- <small class="text-muted d-block mt-2">Hint: 102030</small> -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="confirmHighDiscount">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+
 <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/smoothness/jquery-ui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
 
 <script>
+SECRET_KEY = "102030";
+MAX_DISCOUNT = 10;
 // ====================== DUPLICATE RECEIPT CHECK (100% WORKING) ======================
 function checkReceiptExists() {
     const receiptInput = document.querySelector('input[name="receipt_no"]');
@@ -207,7 +252,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // ====================== YOUR FULL ORIGINAL JS (EVERYTHING INCLUDED) ======================
     function updateTotalsAndFields() {
         let rows = document.querySelectorAll("#salesTable tbody tr");
-        let grandTotal = 0, totalTax = 0;
+         let subtotal = 0, totalTax = 0;
 
         rows.forEach(row => {
             if (row.dataset.deleted === "true") return;
@@ -247,13 +292,55 @@ document.addEventListener("DOMContentLoaded", function () {
             }
 
             totalInput.value = isNaN(rowTotal) ? "0.00" : rowTotal.toFixed(2);
-            grandTotal += rowTotal;
+            subtotal += rowTotal;
             totalTax += (price * (isWeightBased ? netWeight : qty) * tax / 100);
         });
 
         $("#id_tax_amount").val(isNaN(totalTax) ? "0.00" : totalTax.toFixed(2));
-        $("#id_grand_total").val(isNaN(grandTotal) ? "0.00" : grandTotal.toFixed(2));
+        $("#id_total").val(subtotal.toFixed(2));
+
+        let discount = parseFloat($("#id_discount").val()) || 0;
+        let grandTotal = subtotal - discount;
+
+        $("#id_grand_total").val(grandTotal.toFixed(2));
     }
+
+    // Discount validation with secret key
+    let approvedHighDiscount = false;
+
+    $("#id_discount").on("input change", function() {
+        let discount = parseFloat($(this).val()) || 0;
+        let subtotal = parseFloat($("#id_total").val()) || 0;
+
+        if (discount > MAX_DISCOUNT && !approvedHighDiscount) {
+            $(this).val(0); 
+            $("#secretKeyModal").modal('show');
+        } else {
+            updateTotalsAndFields();
+        }
+    });
+
+    $("#confirmHighDiscount").click(function() {
+    let key = $("#secretKeyInput").val();
+    if (key === SECRET_KEY) {
+        approvedHighDiscount = true;
+        $("#secretKeyModal").modal('hide');
+        $("#secretKeyInput").val("");
+        updateTotalsAndFields();
+        alert("High discount approved!");
+    } else {
+        alert("Incorrect key!");
+        $("#id_discount").val(0);
+        updateTotalsAndFields();
+    }
+});
+
+$("#secretKeyModal").on("hidden.bs.modal", function() {
+    if (!approvedHighDiscount) {
+        $("#id_discount").val(0);
+        updateTotalsAndFields();
+    }
+});
 
     updateTotalsAndFields();
 
@@ -359,5 +446,44 @@ document.addEventListener("DOMContentLoaded", function () {
         updateTotalsAndFields();
     });
 });
+
+// BLOCK SUBMIT IF ANY ROW HAS TOTAL IS 0.00 OR ITEM MISSING
+$('form').on('submit', function(e) {
+    let hasError = false;
+    let errors = [];
+
+    $("#salesTable tbody tr").each(function() {
+        const $row = $(this);
+        if ($row.is(':hidden') || $row.find("input[name$='-DELETE']").prop('checked')) return;
+
+        const itemId = $row.find('[name$="-item"]').val();
+        const total = parseFloat($row.find('[name$="-total_amount"]').val()) || 0;
+        const qty = parseFloat($row.find('[name$="-qty"]').val()) || 0;
+        const netWeight = parseFloat($row.find('[name$="-net_weight"]').val()) || 0;
+
+        if (!itemId) {
+            hasError = true;
+            errors.push("Row " + ($row.index() + 1) + ": Please select an item");
+            $row.find('.item-name').addClass('border-danger');
+        } else {
+            $row.find('.item-name').removeClass('border-danger');
+        }
+
+        if (total <= 0 || (qty <= 0 && netWeight <= 0)) {
+            hasError = true;
+            errors.push("Row " + ($row.index() + 1) + ": Total is ₹0.00 — enter quantity or weight");
+            $row.find('[name$="-qty"], [name$="-net_weight"]').addClass('border-danger');
+        } else {
+            $row.find('[name$="-qty"], [name$="-net_weight"]').removeClass('border-danger');
+        }
+    });
+
+    if (hasError) {
+        e.preventDefault();
+        alert("Please fix the following:\n\n• " + errors.join("\n• "));
+        return false;
+    }
+});
+
 </script>
 {% endblock %}

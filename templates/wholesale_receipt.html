@@ -1,3 +1,5 @@
+{% load static %}
+{% load humanize %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -69,12 +71,12 @@
 
     <div class="row">
         <div>
-            <h2>Bharath Agrovet Industries Pvt Ltd</h2>
+            <img style="height: 130px;" src="{%static 'img/jaan_logo.jpeg' %}">
         </div>
         <div>
             <h3>BILL OF SUPPLY - RETAIL</h3>
-            <strong>No:</strong> SIBPL252670645<br>
-            <strong>Date:</strong> Oct 28, 2025<br>
+            <strong>No:</strong> {{ sale.receipt_no }}<br>
+            <strong>Date:</strong> {{ sale.sales_date|date:"d/m/Y" }}<br>
             <strong>GST:</strong> 29AAHCB9792J1ZU<br>
             <strong>PAN:</strong> AAHCB9792J<br>
             <strong>State:</strong> Karnataka<br>
@@ -102,9 +104,9 @@
 
         <div class="col">
             <strong>CONSIGNEE DETAILS</strong><br><br>
-            Name: Sahil, Jan Chicken Kodikal<br>
-            Address: Mangalore, Karnataka, India, 575001<br>
-            Contact #: 123456789<br>
+            Name: {{ sale.customer.customer_name }}l<br>
+            Address: {{ sale.customer.customer_address }}<br>
+            Contact #: {{ sale.customer.customer_phone }}<br>
         </div>
     </div>
 
@@ -113,31 +115,33 @@
     <table>
         <tr>
             <th>SL No</th>
-            <th>ITEM CODE</th>
             <th>ITEM NAME</th>
             <th>QTY</th>
+            <th>WEIGHT</th>
             <th>RATE</th>
             <th>AMOUNT</th>
-            <th>VALUE OF SUPPLY</th>
         </tr>
+        {% for d in sale.details.all %}
         <tr>
-            <td>1</td>
-            <td>MTP038</td>
-            <td>WS 1.6 - 2<br><small>HSN Code : 02071100</small></td>
-            <td>24.4 kgs</td>
-            <td>₹175.00</td>
-            <td>₹4,270.00</td>
-            <td>₹4,270.00</td>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ d.item.name }}</td>
+            <td>{{ d.qty|default:"—" }}</td>
+            <td>{{ d.net_weight|floatformat:3|default:"—" }}</td>
+            <td class="text-right">₹{{ d.price_per_unit|floatformat:2 }}</td>
+            <td class="text-right">₹{{ d.total_amount|floatformat:2|intcomma }}</td>
         </tr>
+         {% empty %}
+        <tr><td colspan="6">No items</td></tr>
+        {% endfor %}
     </table>
 
     <br>
 
     <table class="totals">
-        <tr><td><strong>SUBTOTAL :</strong></td><td>₹4,270.00</td></tr>
-        <tr><td><strong>ROUND OFF :</strong></td><td>0.00</td></tr>
-        <tr><td><strong>GRAND TOTAL :</strong></td><td><strong>₹4,270.00</strong></td></tr>
-        <tr><td><strong>Total in Words :</strong></td><td>Four thousand two hundred seventy Indian Rupee only</td></tr>
+        <tr><td><strong>SUBTOTAL :</strong></td><td>₹{{ sale.total|floatformat:2|intcomma }}</td></tr>
+        <tr><td><strong>ROUND OFF :</strong></td><td>₹{{ sale.discount|floatformat:2|intcomma }}</td></tr>
+        <tr><td><strong>GRAND TOTAL :</strong></td><td><strong>₹{{ sale.grand_total|floatformat:2|intcomma }}</strong></td></tr>
+        <tr><td><strong>Total in Words :</strong></td><td><span id="amountInWords">Loading...</span> Only.</td></tr>
     </table>
 
     <div class="signature">
@@ -147,12 +151,78 @@
         <span style="font-size: 9px;">Certified that the particulars given above are true and correct.</span>
     </div>
 
-    <div class="note">
-        <br><br>
-        <strong>This is a computer-generated Bill Of Supply. Signature not required.</strong>
-    </div>
 
 </div>
+<script>
 
+    // Reliable Indian Rupee to Words Converter
+function convertToWords() {
+    const amount = parseFloat("{{ sale.grand_total|floatformat:2 }}") || 0;
+    if (amount === 0) {
+        document.getElementById("amountInWords").textContent = "Zero Rupees";
+        return;
+    }
+
+    const ones = ["", "One ", "Two ", "Three ", "Four ", "Five ", "Six ", "Seven ", "Eight ", "Nine ", "Ten ",
+                "Eleven ", "Twelve ", "Thirteen ", "Fourteen ", "Fifteen ", "Sixteen ", "Seventeen ", "Eighteen ", "Nineteen "];
+
+    const tens = ["", "", "Twenty ", "Thirty ", "Forty ", "Fifty ", "Sixty ", "Seventy ", "Eighty ", "Ninety "];
+
+    function convertLessThanThousand(num) {
+        let str = "";
+        if (num >= 100) {
+            str += ones[Math.floor(num / 100)] + "Hundred ";
+            num %= 100;
+        }
+        if (num >= 20) {
+            str += tens[Math.floor(num / 10)];
+            num %= 10;
+        }
+        if (num > 0 && num < 20) {
+            str += ones[num];
+        }
+        return str.trim();
+    }
+
+    let rupees = Math.floor(amount);
+    let paise = Math.round((amount - rupees) * 100);
+
+    let result = "";
+
+    if (rupees === 0) {
+        result = "Zero ";
+    } else {
+        let crores = Math.floor(rupees / 10000000);
+        rupees %= 10000000;
+        if (crores > 0) result += convertLessThanThousand(crores) + "Crore ";
+
+        let lakhs = Math.floor(rupees / 100000);
+        rupees %= 100000;
+        if (lakhs > 0) result += convertLessThanThousand(lakhs) + "Lakh ";
+
+        let thousands = Math.floor(rupees / 1000);
+        rupees %= 1000;
+        if (thousands > 0) result += convertLessThanThousand(thousands) + "Thousand ";
+
+        if (rupees > 0) result += convertLessThanThousand(rupees);
+    }
+
+    result += " Rupees";
+
+    if (paise > 0) {
+        result += " and " + convertLessThanThousand(paise) + "Paise";
+    }
+
+    document.getElementById("amountInWords").textContent = result.trim();
+}
+
+// Run on page load
+convertToWords();
+
+window.print();
+setTimeout(function(){
+    window.location = "{% url 'wholesale_sales_add' %}";
+}, 1800)
+</script>
 </body>
 </html>

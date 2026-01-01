@@ -147,8 +147,9 @@ class RetailSales(models.Model):
     created_date = models.DateTimeField(auto_now_add=True)
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT)
     tax_amount = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True, default=0)
+    discount = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, default=0)
+    total = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, default=0)
     grand_total = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, default=0)
-    round_off = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, default=0)
     added_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='sales_added')
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='sales_updated', null=True, blank=True)
     deleted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='sales_deleted', null=True, blank=True)
@@ -177,6 +178,8 @@ class WholesaleSales(models.Model):
     created_date = models.DateTimeField(auto_now_add=True)
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT)
     tax_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, default=0)
+    discount = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, default=0)
+    total = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, default=0)
     grand_total = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, default=0)
     added_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='wholesale_sales_added')
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='wholesale_sales_updated', null=True, blank=True)
@@ -258,3 +261,25 @@ class WholesalePayment(models.Model):
 
     class Meta:
         ordering = ['-payment_date']
+
+class ExpenseCategory(models.Model):
+    expense_name = models.TextField(blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    delete_status = models.BooleanField(default=False)
+    
+    def __str__(self):
+        return self.expense_name or f"Category {self.pk}"  # Fallback if name is blank
+
+class Expense(models.Model):
+    expense = models.ForeignKey(ExpenseCategory,on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=12, decimal_places=3,default='0.000')
+    payment_mode = models.CharField(
+        max_length=20,
+        choices=(('cash', 'Cash'), ('upi', 'UPI'), ('online', 'Online'), ('cheque', 'Cheque')),
+        default='cash'
+    )
+    payment_date = models.DateField()
+    description = models.TextField(blank=True, null=True)
+    staff = models.ForeignKey(Employe, on_delete=models.PROTECT, null=True, blank=True)
+    delete_status = models.BooleanField(default=False)
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, null=True, blank=True)

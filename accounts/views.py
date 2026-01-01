@@ -7,8 +7,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.db import transaction
 from decimal import Decimal, InvalidOperation
-from .forms import EmployeeLoginForm,PurchaseForm, PurchaseDetailFormSet, ItemCategoryForm, BranchForm, SupplierForm, ItemForm, RetailSalesForm, RetailSalesDetailFormSet, CustomerDataForm, WholesaleSalesForm, WholesaleSalesDetailFormSet,SupplierpayForm,EmployeForm,AttendanceInlineForm,CustomerForm,WholesalePaymentForm
-from .models import Purchase, PurchaseDetail, Branch, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance,WholesalePayment
+from .forms import ExpenseCategoryForm,ExpenseForm,EmployeeLoginForm,PurchaseForm, PurchaseDetailFormSet, ItemCategoryForm, BranchForm, SupplierForm, ItemForm, RetailSalesForm, RetailSalesDetailFormSet, CustomerDataForm, WholesaleSalesForm, WholesaleSalesDetailFormSet,SupplierpayForm,EmployeForm,AttendanceInlineForm,CustomerForm,WholesalePaymentForm
+from .models import ExpenseCategory,Expense,Purchase, PurchaseDetail, Branch, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance,WholesalePayment
 import logging
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
@@ -19,6 +19,109 @@ from django.db import models
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
+
+@login_required
+def expense_category_list(request):
+    categories = ExpenseCategory.objects.filter(delete_status=False).order_by('expense_name')
+    return render(request, 'expense_category_list.html', {'categories': categories})
+
+@login_required
+def expense_category_add(request):
+    if request.method == "POST":
+        form = ExpenseCategoryForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Expense category added successfully!")
+            return redirect('expense_category_list')
+    else:
+        form = ExpenseCategoryForm()
+    return render(request, 'expense_category_add.html', {'form': form})
+
+@login_required
+def expense_category_update(request, pk):
+    category = get_object_or_404(ExpenseCategory, pk=pk, delete_status=False)
+    if request.method == "POST":
+        form = ExpenseCategoryForm(request.POST, instance=category)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Expense category updated successfully!")
+            return redirect('expense_category_list')
+    else:
+        form = ExpenseCategoryForm(instance=category)
+    return render(request, 'expense_category_add.html', {'form': form, 'category': category})
+
+@login_required
+def expense_category_delete(request, pk):
+    category = get_object_or_404(ExpenseCategory, pk=pk, delete_status=False)
+    if request.method == "POST":
+        category.delete_status = True
+        category.save()
+        messages.success(request, "Expense category deleted successfully.")
+        return redirect('expense_category_list')
+    return render(request, 'expense_category_delete.html', {'category': category})
+
+@login_required
+def expense_add(request):
+    if request.method == "POST":
+        form = ExpenseForm(request.POST, user=request.user)
+        if form.is_valid():
+            expense = form.save(commit=False)
+            expense.save()
+            messages.success(request, f"Expense ₹{expense.amount} recorded!")
+            return redirect('expense_list')
+    else:
+        form = ExpenseForm(user=request.user)
+    return render(request, 'expense_add.html', {'form': form})
+
+@login_required
+def expense_list(request):
+    user = request.user
+    is_admin_like = user.role in ['admin', 'super_admin']
+
+    # Filters
+    branch_id = request.GET.get('branch')
+    from_date_str = request.GET.get('from_date')
+    to_date_str = request.GET.get('to_date')
+
+    expenses = Expense.objects.filter(delete_status=False).select_related('expense', 'staff', 'branch')
+
+    if from_date_str:
+        try:
+            from_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
+            expenses = expenses.filter(payment_date__gte=from_date)
+        except:
+            pass
+    if to_date_str:
+        try:
+            to_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
+            expenses = expenses.filter(payment_date__lte=to_date)
+        except:
+            pass
+
+    selected_branch = None
+    if is_admin_like:
+        if branch_id and branch_id.isdigit():
+            expenses = expenses.filter(branch_id=branch_id)
+            selected_branch = Branch.objects.filter(branch_id=branch_id).first()
+    else:
+        if user.branch:
+            expenses = expenses.filter(branch=user.branch)
+            selected_branch = user.branch
+        else:
+            expenses = expenses.none()
+
+    expenses = expenses.order_by('-payment_date')
+
+    context = {
+        'expenses': expenses,
+        'branches': Branch.objects.all() if is_admin_like else [],
+        'is_admin_like': is_admin_like,
+        'selected_branch': selected_branch,
+        'from_date': from_date_str,
+        'to_date': to_date_str,
+        'today': date.today().strftime('%Y-%m-%d'),
+    }
+    return render(request, 'expense_list.html', context)
 
 @login_required
 def wholesale_payment_add(request):
@@ -1460,8 +1563,7 @@ def wholesale_sales_add(request):
                         item.save()
 
                 messages.success(request, f"Wholesale Sale {receipt_no} created successfully!")
-                return redirect('wholesale_sales_add')
-                # return redirect('wholesale_sales_add', pk=sales.pk)
+                return redirect('wholesale_receipt', pk=sales.pk)
 
         else:
             # Show form errors

@@ -1,0 +1,80 @@
+{% load static %}
+{% include "sidebar/sidebar.html" %}
+{% load humanize %}
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">Expenses</h1>
+
+    <div class="row mb-3">
+        <div class="col">
+            <a href="{% url 'expense_add' %}" class="btn btn-success">+ Record Expense</a>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Filter Expenses</h6>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                {% if is_admin_like %}
+                <div class="col-md-3">
+                    <select name="branch" class="form-control">
+                        <option value="">All Branches</option>
+                        {% for b in branches %}
+                        <option value="{{ b.branch_id }}" {% if selected_branch.branch_id == b.branch_id %}selected{% endif %}>
+                            {{ b.branch_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                <div class="col-md-3">
+                    <input type="date" name="from_date" class="form-control" value="{{ from_date|default:'' }}">
+                </div>
+                <div class="col-md-3">
+                    <input type="date" name="to_date" class="form-control" value="{{ to_date|default:'' }}">
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary">Filter</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date</th>
+                            <th>Category</th>
+                            <th>Amount</th>
+                            <th>Mode</th>
+                            <th>Staff</th>
+                            <th>Description</th>
+                            <th>Branch</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for e in expenses %}
+                        <tr>
+                            <td>{{ e.payment_date|date:"d/m/Y" }}</td>
+                            <td>{{ e.expense.expense_name }}</td>
+                            <td>₹{{ e.amount|floatformat:2|intcomma }}</td>
+                            <td>{{ e.get_payment_mode_display }}</td>
+                            <td>{{ e.staff.name|default:"—" }}</td>
+                            <td>{{ e.description|default:"—" }}</td>
+                            <td>{{ e.branch.branch_name|default:"—" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="text-center">No expenses found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

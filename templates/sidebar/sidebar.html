@@ -43,7 +43,7 @@
         <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
 
             <!-- Sidebar - Brand -->
-            <a class="sidebar-brand d-flex align-items-center justify-content-center" href="index.html">
+            <a class="sidebar-brand d-flex align-items-center justify-content-center" href="{% url 'dashboard' %}">
                 <div class="sidebar-brand-icon rotate-n-15">
                     
                 </div>
@@ -170,6 +170,25 @@
                     <div class="bg-white py-2 collapse-inner rounded">
                         <a class="collapse-item" href="{% url 'customer_list' %}">customer</a>
                     </div>
+                </div>
+            </li>
+            {% endif %}
+
+            {% if request.user.role == 'admin' or request.user.role == 'super_admin' or request.user.role == 'manager'%}
+
+            <li class="nav-item">
+                <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapsePages7"
+                    aria-expanded="true" aria-controls="collapsePages7">
+                    <i class="fas fa-fw fa-folder"></i>
+                    <span>Expense</span>
+                </a>
+                
+                <div id="collapsePages7" class="collapse" aria-labelledby="headingPages" data-parent="#accordionSidebar">
+                    <div class="bg-white py-2 collapse-inner rounded">
+                        <a class="collapse-item" href="{% url 'expense_category_list' %}">Expense Category</a>
+                        <a class="collapse-item" href="{% url 'expense_list' %}">Expense</a>
+                    </div>
+                    
                 </div>
             </li>
             {% endif %}

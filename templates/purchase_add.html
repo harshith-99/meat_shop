@@ -219,7 +219,7 @@ $(document).ready(function() {
             const $net = $row.find("input[name$='net_weight']");
 
             if (isWeightBased) {
-                $qty.val('0').prop('readonly', true).css('background-color', '#f0f0f0');
+                $qty.prop('readonly', false).css('background-color', '');
                 $gross.prop('readonly', false).css('background-color', '');
                 $empty.prop('readonly', false).css('background-color', '');
                 $net.prop('readonly', true).val('0.00');

@@ -1,0 +1,33 @@
+{% load static %}
+{% include "sidebar/sidebar.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">
+        {% if category %}Update{% else %}Add{% endif %} Expense Category
+    </h1>
+
+    <div class="card shadow">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        {{ form.expense_name.label_tag }}
+                        {{ form.expense_name }}
+                        {% if form.expense_name.errors %}
+                            <small class="text-danger">{{ form.expense_name.errors|join:", " }}</small>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-12 mb-3">
+                        {{ form.description.label_tag }}
+                        {{ form.description }}
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success">Save Category</button>
+                <a href="{% url 'expense_category_list' %}" class="btn btn-secondary">Cancel</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

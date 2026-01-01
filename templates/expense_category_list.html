@@ -1,0 +1,48 @@
+{% load static %}
+{% include "sidebar/sidebar.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">Expense Categories</h1>
+
+    <a href="{% url 'expense_category_add' %}" class="btn btn-success mb-3">+ Add Category</a>
+
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+
+    <div class="card shadow">
+        <div class="card-body">
+            <table class="table table-bordered">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Category Name</th>
+                        <th>Description</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cat in categories %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ cat.expense_name }}</td>
+                        <td>{{ cat.description|default:"—" }}</td>
+                        <td>
+                            <a href="{% url 'expense_category_update' cat.pk %}" class="btn btn-warning btn-sm">Edit</a>
+                            <a href="{% url 'expense_category_delete' cat.pk %}" class="btn btn-danger btn-sm"
+                               onclick="return confirm('Delete this category?')">Delete</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="text-center">No categories found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

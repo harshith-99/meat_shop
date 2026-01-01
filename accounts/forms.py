@@ -1,11 +1,96 @@
 from django import forms
-from .models import CustomUser,Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance,WholesalePayment
+from .models import ExpenseCategory,Expense,CustomUser,Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance,WholesalePayment
 from django.forms import modelformset_factory
 from django.forms import inlineformset_factory
 from django.core.exceptions import ValidationError
 from decimal import Decimal
 
+class ExpenseCategoryForm(forms.ModelForm):
+    expense_name = forms.CharField(
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Expense Name'}),
+        max_length=150
+    )
+    description = forms.CharField(
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Description'}),
+    )
+    class Meta:
+        model = ExpenseCategory
+        fields = ['expense_name', 'description']
 
+class ExpenseForm(forms.ModelForm):
+    expense = forms.ModelChoiceField(
+        queryset=ExpenseCategory.objects.filter(delete_status=False),
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        required=True,
+        label="Expense Category"
+    )
+    amount = forms.DecimalField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off', 'step': '0.01'}),
+        required=True,
+        min_value=Decimal('0.01')
+    )
+    payment_mode = forms.ChoiceField(
+        choices=(('cash', 'Cash'), ('upi', 'UPI'), ('online', 'Online'), ('cheque', 'Cheque')),
+        widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+        required=True
+    )
+    payment_date = forms.DateField(
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control', 'autocomplete': 'off'}),
+        required=True
+    )
+    description = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'placeholder': 'Description (optional)',
+            'rows': 3,
+            'autocomplete': 'off'
+        })
+    )
+    staff = forms.ModelChoiceField(
+        queryset=Employe.objects.all(),
+        widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+        required=False,
+        label="Select Staff",
+    )
+    branch = forms.ModelChoiceField(
+        queryset=Branch.objects.all(),
+        widget=forms.HiddenInput(),  # Default: hidden
+        required=False
+    )
+
+    class Meta:
+        model = Expense
+        fields = ['expense', 'amount', 'payment_mode', 'payment_date', 'description', 'staff', 'branch']
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+        # Set queryset for branch
+        self.fields['branch'].queryset = Branch.objects.all()
+
+        # Non-admin (staff/manager): auto-set branch from login
+        if user and user.role in ['staff', 'manager'] and user.branch:
+            self.fields['branch'].initial = user.branch
+            self.fields['branch'].widget = forms.HiddenInput()
+
+            # Force value on validation error
+            if self.data:
+                mutable_data = self.data.copy()
+                mutable_data['branch'] = str(user.branch.pk)
+                self.data = mutable_data
+
+        # Admin/Super Admin: show dropdown
+        elif user and user.role in ['admin', 'super_admin']:
+            self.fields['branch'].widget = forms.Select(attrs={'class': 'form-control'})
+            self.fields['branch'].required = True
+            self.fields['branch'].empty_label = "-- Select Branch --"
+            self.fields['branch'].queryset = Branch.objects.all().order_by('branch_name')
+        else:
+            self.fields['branch'].widget = forms.HiddenInput()
+
+    
 class EmployeeLoginForm(forms.ModelForm):
     employee = forms.ModelChoiceField(
         queryset=Employe.objects.filter(delete_status=False),
@@ -397,7 +482,8 @@ class PurchaseDetailForm(forms.ModelForm):
 
     purchase_type = forms.ChoiceField(
         choices=[('retail', 'Retail'), ('wholesale', 'Wholesale')],
-        widget=forms.Select(attrs={'class': 'form-control', 'style': 'width: 85px;', 'required': 'true', 'autocomplete': 'off'})
+        widget=forms.Select(attrs={'class': 'form-control', 'style': 'width: 85px;', 'required': 'true', 'autocomplete': 'off'}),
+        initial='retail'
     )
     category = forms.ModelChoiceField(
         queryset=ItemCategory.objects.all(),
@@ -588,7 +674,7 @@ class CustomerDataForm(forms.Form):
 class RetailSalesForm(forms.ModelForm):
     class Meta:
         model = RetailSales
-        fields = ['receipt_no', 'sales_date', 'branch', 'tax_amount', 'grand_total', 'payment_mode','take_amay_employee']
+        fields = ['receipt_no', 'sales_date', 'branch', 'tax_amount','discount','total', 'grand_total', 'payment_mode','take_amay_employee']
 
     receipt_no = forms.CharField(
         widget=forms.TextInput(attrs={'class': 'form-control', 'readonly': True, 'autocomplete': 'off'})
@@ -602,6 +688,14 @@ class RetailSalesForm(forms.ModelForm):
         required=True
     )
     tax_amount = forms.DecimalField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'readonly': True, 'autocomplete': 'off'}),
+        required=False
+    )
+    discount = forms.DecimalField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'readonly': False, 'autocomplete': 'off'}),
+        required=False
+    )
+    total = forms.DecimalField(
         widget=forms.NumberInput(attrs={'class': 'form-control', 'readonly': True, 'autocomplete': 'off'}),
         required=False
     )
@@ -682,7 +776,7 @@ RetailSalesDetailFormSet = modelformset_factory(
 class WholesaleSalesForm(forms.ModelForm):
     class Meta:
         model = WholesaleSales
-        fields = ['receipt_no', 'sales_date', 'branch', 'tax_amount', 'grand_total', 'payment_mode', 'paid_amount']
+        fields = ['receipt_no', 'sales_date', 'branch', 'tax_amount','discount','total', 'grand_total', 'payment_mode', 'paid_amount']
 
     receipt_no = forms.CharField(
         widget=forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
@@ -697,6 +791,14 @@ class WholesaleSalesForm(forms.ModelForm):
         required=True
     )
     tax_amount = forms.DecimalField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'readonly': True, 'autocomplete': 'off'}),
+        required=False
+    )
+    discount = forms.DecimalField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'readonly': False, 'autocomplete': 'off'}),
+        required=False
+    )
+    total = forms.DecimalField(
         widget=forms.NumberInput(attrs={'class': 'form-control', 'readonly': True, 'autocomplete': 'off'}),
         required=False
     )

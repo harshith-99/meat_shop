@@ -1,0 +1,68 @@
+{% load static %}
+{% include "sidebar/sidebar.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">Record Expense</h1>
+
+    <div class="card shadow">
+        <div class="card-header bg-danger text-white">
+            <h6 class="m-0 font-weight-bold">New Expense Entry</h6>
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        {{ form.expense.label_tag }}
+                        {{ form.expense }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        {{ form.amount.label_tag }}
+                        {{ form.amount }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        {{ form.payment_mode.label_tag }}
+                        {{ form.payment_mode }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        {{ form.payment_date.label_tag }}
+                        {{ form.payment_date }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        {{ form.staff.label_tag }}
+                        {{ form.staff }}
+                    </div>
+
+                    <!-- BRANCH – Conditional Display -->
+                    {% if user.role in 'admin,super_admin' %}
+                    <div class="col-md-6 mb-3">
+                        {{ form.branch.label_tag }}
+                        {{ form.branch }}
+                    </div>
+                    {% else %}
+                    <!-- Hidden branch field for staff/manager -->
+                    {{ form.branch }}
+                    <!-- Read-only display of current branch -->
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">Branch</label>
+                        <input type="text" class="form-control bg-light" 
+                               value="{{ request.user.branch.branch_name }} ({{ request.user.branch.alias|default:'—' }})" 
+                               readonly>
+                        <small class="text-muted">Auto-selected from your login</small>
+                    </div>
+                    {% endif %}
+
+                    <div class="col-md-12 mb-3">
+                        {{ form.description.label_tag }}
+                        {{ form.description }}
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-success btn-lg">Save Expense</button>
+                <a href="{% url 'expense_list' %}" class="btn btn-secondary btn-lg ms-3">Cancel</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

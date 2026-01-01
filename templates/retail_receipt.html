@@ -7,7 +7,7 @@
         body {
             font-family: Arial, sans-serif;
             font-size: 13px;
-            margin: 0.5mm 3.5mm 1mm 5mm; /* Minimized top margin */
+            margin: 0.5mm 3.5mm 1mm 5mm;
             padding: 0;
             width: auto;
             box-sizing: border-box;
@@ -21,26 +21,59 @@
         .header h3 { margin: 0; padding-top: 0; }
         .header b { display: block; margin: 0; line-height: 1.2; }
 
+        /* DUPLICATE BILL - SUPER VISIBLE */
+        .duplicate-stamp {
+            position: absolute;
+            top: 33mm;
+            left: 50%;
+            transform: translateX(-50%) rotate(-25deg);
+            font-size: 18px;
+            font-weight: 900;
+            color: red;
+            opacity: 0.8;
+            border: 8px double red;
+            padding: 10px 40px;
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.7);
+            z-index: 10;
+            pointer-events: none;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            box-shadow: 0 0 10px rgba(255,0,0,0.5);
+        }
+
+        /* TAKE-AWAY CUSTOMER - PROMINENT TOP HEADER */
+        .takeaway-customer {
+            text-align: center;
+            background: #000;
+            color: white;
+            padding: 8px;
+            margin: 6px 0 10px 0;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 6px;
+        }
+
         /* MULTI TOKEN ROW - HORIZONTAL */
         .token-container {
             text-align: center;
-            margin: 4px 0 6px 0;
+            margin: 6px 0 8px 0;
         }
         .token-row {
             display: flex;
             justify-content: center;
-            gap: 8px; /* Reduced space between tokens */
-            flex-wrap: wrap; 
+            gap: 8px;
+            flex-wrap: wrap;
             margin: 5px 0;
         }
         .token-oval {
             display: inline-block;
-            width: 15mm; /* CRITICAL: Reduced width to fit 4 per line */
-            height: 12mm; /* Reduced height */
-            line-height: 13mm; /* Adjusted line-height */
+            width: 15mm;
+            height: 12mm;
+            line-height: 13mm;
             background: #000;
             color: white;
-            font-size: 6mm; /* Reduced font size to fit the smaller oval */
+            font-size: 6mm;
             font-weight: 900;
             border-radius: 50%;
             border: 2px solid black;
@@ -49,7 +82,6 @@
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
         }
-        /* Token Label removed as it was not used */
 
         .info {
             font-size: 11px;
@@ -73,23 +105,31 @@
         .text-right { text-align: right; }
         .footer {
             text-align: center;
-            margin-top: 6px;
+            margin-top: 8px;
             font-size: 13px;
             font-weight: bold;
         }
-        
-        /* Removed tfoot tr:first-child border style since Tax Total is removed */
 
         .grand-total-row td {
             font-size: 16px;
             font-weight: bold;
+            padding-top: 2px;
+            
+        }
+        .sub-total-row{
+            font-size: 11px;
+            font-weight: bold;
             padding-top: 6px;
-            border-top: 1px dashed #000; /* Added dashed line above Grand Total */
+            border-top: 1px dashed #000;
         }
 
         @media print {
             .no-print { display: none; }
-            .token-oval {
+            .token-oval, .takeaway-customer {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .duplicate-stamp {
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
@@ -97,28 +137,38 @@
     </style>
 </head>
 <body>
+
     {% load humanize %}
-    {% load static %}
+
+    <!-- BIG RED DUPLICATE STAMP -->
     {% if request.GET.duplicate %}
+    <div class="duplicate-stamp">DUPLICATE</div>
+    {% endif %}
+
+    <!-- TAKE-AWAY CUSTOMER - PROMINENT AT TOP -->
+    {% if sale.take_amay_employee and sale.customer %}
     <div class="header">
-        <h4>DUPLICATE BILL</h4>
+        <h3>Name: {{ sale.customer.customer_name }}<br>
+        {% if sale.customer.customer_phone %} Phone : {{ sale.customer.customer_phone }} {% endif %} <br>
+        {% if sale.customer.customer_address %} Address : {{ sale.customer.customer_address }} {% endif %} <br><br></h3>
     </div>
     {% endif %}
+
+    <!-- SHOP HEADER -->
     <div class="header">
         <h3>JAAN CHICKEN'S</h3>
         <b>MULLAKADU 4TH MAIL • AKASHBHAVANA<br>
         PH: 8971502393 • 9900365123</b>
     </div>
 
+    <!-- TOKEN DISPLAY -->
     <div class="token-container">
         {% if sale.details.all %}
             <div class="token-row">
                 {% for detail in sale.details.all %}
                     {% if detail.token %}
                     <div>
-                        <div class="token-oval">
-                            {{ detail.token }}
-                        </div>
+                        <div class="token-oval">{{ detail.token }}</div>
                     </div>
                     {% endif %}
                 {% endfor %}
@@ -132,18 +182,21 @@
         {% endif %}
     </div>
 
+    <!-- BILL INFO -->
     <div class="info">
         <strong>Receipt:</strong> {{ sale.receipt_no }} |
         <strong>Date:</strong> {{ sale.sales_date|date:"d/m/Y" }}
     </div>
 
-    {% if sale.customer %}
+    <!-- NORMAL CUSTOMER (if not take-away) -->
+    {% if sale.customer and not sale.take_amay_employee %}
     <div class="info">
         <strong>Customer:</strong> {{ sale.customer.customer_name }}
         {% if sale.customer.customer_phone %} ({{ sale.customer.customer_phone }}) {% endif %}
     </div>
     {% endif %}
 
+    <!-- ITEMS TABLE -->
     <table>
         <thead>
             <tr>
@@ -170,6 +223,14 @@
             {% endfor %}
         </tbody>
         <tfoot>
+            <tr class="sub-total-row">
+                <td colspan="5" class="text-right"><strong>SUB TOTAL</strong></td>
+                <td class="text-right">₹{{ sale.total|floatformat:2|intcomma }}</td>
+            </tr>
+            <tr style = "font-weight: bold">
+                <td colspan="5" class="text-right"><strong>DISCOUNT</strong></td>
+                <td class="text-right">₹{{ sale.discount|floatformat:2|intcomma }}</td>
+            </tr>
             <tr class="grand-total-row">
                 <td colspan="5" class="text-right"><strong>GRAND TOTAL</strong></td>
                 <td class="text-right">₹{{ sale.grand_total|floatformat:2|intcomma }}</td>

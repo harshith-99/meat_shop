@@ -77,6 +77,15 @@ urlpatterns = [
     path('customers/add/', views.customer_add, name='customer_add'),
     path('customers/update/<int:pk>/', views.customer_update, name='customer_update'),
     path('customers/delete/<int:pk>/', views.customer_delete, name='customer_delete'),
+    
+    # Expense URLs
+    path('expense-categories/', views.expense_category_list, name='expense_category_list'),
+    path('expense-categories/add/', views.expense_category_add, name='expense_category_add'),
+    path('expense-categories/<int:pk>/update/', views.expense_category_update, name='expense_category_update'),
+    path('expense-categories/<int:pk>/delete/', views.expense_category_delete, name='expense_category_delete'),
+
+    path('expenses/add/', views.expense_add, name='expense_add'),
+    path('expenses/', views.expense_list, name='expense_list'),
 
     #create login
     # urls.py
