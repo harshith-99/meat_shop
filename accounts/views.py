@@ -13,12 +13,113 @@ import logging
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from django.http import HttpRequest
-from datetime import datetime, date
+from datetime import datetime, date,timedelta
 from django.contrib.auth.hashers import make_password
 from django.db import models
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
+
+
+@login_required
+def dashboard_view(request):
+    user = request.user
+    branch = user.branch if user.branch else None
+    is_admin_like = user.role in ['super_admin', 'admin']
+
+    # === FILTERS ===
+    period = request.GET.get('period', 'month')
+    from_date_str = request.GET.get('from_date')
+    to_date_str = request.GET.get('to_date')
+    today = date.today()
+
+    # Determine date range
+    if period == 'week':
+        from_date = today - timedelta(days=today.weekday())  # Monday
+        to_date = from_date + timedelta(days=6)
+    elif period == 'month':
+        from_date = today.replace(day=1)
+        to_date = today
+    elif period == 'year':
+        from_date = today.replace(month=1, day=1)
+        to_date = today
+    else:  # custom
+        try:
+            from_date = datetime.strptime(from_date_str, '%Y-%m-%d').date() if from_date_str else today - timedelta(days=30)
+            to_date = datetime.strptime(to_date_str, '%Y-%m-%d').date() if to_date_str else today
+        except:
+            from_date = today - timedelta(days=30)
+            to_date = today
+
+    # Apply branch filter
+    purchase_filter = Q(delete_status=False, purchase_date__range=[from_date, to_date])
+    retail_filter = Q(delete_status=False, sales_date__range=[from_date, to_date])
+    wholesale_filter = Q(delete_status=False, sales_date__range=[from_date, to_date])
+
+    if not is_admin_like and branch:
+        purchase_filter &= Q(branch=branch)
+        retail_filter &= Q(branch=branch)
+        wholesale_filter &= Q(branch=branch)
+
+    # === TODAY'S SUMMARY ===
+    today_purchase = Purchase.objects.filter(purchase_filter & Q(purchase_date=today)).aggregate(s=Sum('grand_total'))['s'] or 0
+    today_retail = RetailSales.objects.filter(retail_filter & Q(sales_date=today)).aggregate(s=Sum('grand_total'))['s'] or 0
+    today_wholesale = WholesaleSales.objects.filter(wholesale_filter & Q(sales_date=today)).aggregate(s=Sum('grand_total'))['s'] or 0
+    today_sales = today_retail + today_wholesale
+    today_profit = today_sales - today_purchase
+    pending_credit = RetailSales.objects.filter(payment_mode='pending', delete_status=False).aggregate(s=Sum('grand_total'))['s'] or 0
+
+    # === CHART DATA ===
+    # Generate all dates in range
+    delta = to_date - from_date
+    date_range = [from_date + timedelta(days=i) for i in range(delta.days + 1)]
+
+    # Labels (format based on period)
+    if period == 'week':
+        labels = [d.strftime('%a %d') for d in date_range]  # Mon 02, Tue 03...
+    elif delta.days <= 40:
+        labels = [d.strftime('%b %d') for d in date_range]  # Jan 02
+    else:
+        labels = [d.strftime('%b %Y') for d in date_range]  # Jan 2026
+
+    # Aggregate purchases
+    purchases = Purchase.objects.filter(purchase_filter).values('purchase_date').annotate(total=Sum('grand_total')).order_by('purchase_date')
+    purchase_map = {p['purchase_date']: float(p['total'] or 0) for p in purchases}
+    purchase_data = [purchase_map.get(d, 0) for d in date_range]
+
+    # Aggregate retail sales
+    retail = RetailSales.objects.filter(retail_filter).values('sales_date').annotate(total=Sum('grand_total')).order_by('sales_date')
+    retail_map = {r['sales_date']: float(r['total'] or 0) for r in retail}
+    retail_data = [retail_map.get(d, 0) for d in date_range]
+
+    # Aggregate wholesale sales
+    wholesale = WholesaleSales.objects.filter(wholesale_filter).values('sales_date').annotate(total=Sum('grand_total')).order_by('sales_date')
+    wholesale_map = {w['sales_date']: float(w['total'] or 0) for w in wholesale}
+    wholesale_data = [wholesale_map.get(d, 0) for d in date_range]
+
+    context = {
+        'user': user,
+        'branch_name': branch.branch_name if branch else 'All Branches',
+
+        # Today's cards
+        'today_sales': today_sales,
+        'today_purchase': today_purchase,
+        'today_profit': today_profit,
+        'pending_credit': pending_credit,
+
+        # Chart data
+        'labels': labels,
+        'purchase_data': purchase_data,
+        'retail_sales_data': retail_data,
+        'wholesale_sales_data': wholesale_data,
+
+        # Filters (for form)
+        'period': period,
+        'from_date': from_date_str or from_date.strftime('%Y-%m-%d'),
+        'to_date': to_date_str or to_date.strftime('%Y-%m-%d'),
+    }
+
+    return render(request, 'dashboard.html', context)
 
 @login_required
 def expense_category_list(request):
@@ -470,18 +571,6 @@ def items_by_category(request: HttpRequest, category_id: int):
     if not items.exists():
         print("No items found for this category")
     return JsonResponse(list(items), safe=False)
-
-@login_required(login_url='login')
-def dashboard_view(request):
-    user = request.user
-    branch_name = None
-    if hasattr(user, "branch") and user.branch:
-        branch_name = user.branch.branch_name
-    context = {
-        "user": user,
-        "branch_name": branch_name,
-    }
-    return render(request, "dashboard.html", context)
 
 @login_required(login_url='login')
 def supplier_list(request):
