@@ -1,0 +1,166 @@
+{% load static %}
+{% include "sidebar/sidebar.html" %}
+{% block content %}
+<div class="container mt-4">
+
+<h3>Daily Stock Update – {{ selected_date }}
+</h3>
+{% if messages %}
+  {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+      {{ message }}
+    </div>
+  {% endfor %}
+{% endif %}
+<form method="get" class="row g-2 mb-3">
+  <div class="col-md-3">
+    <select name="branch" class="form-control"
+      {% if role not in 'admin super_admin' %}disabled{% endif %}>
+      {% for b in branches %}
+        <option value="{{ b.pk }}" {% if b == branch %}selected{% endif %}>
+          {{ b.branch_name }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  {% if role == 'super_admin' %}
+  <div class="col-md-3">
+    <input type="date" name="date" class="form-control" value="{{ selected_date }}">
+  </div>
+  {% endif %}
+
+  <div class="col-md-2">
+    <button class="btn btn-primary">Filter</button>
+  </div>
+</form>
+
+<form method="post">
+{% csrf_token %}
+{{ formset.management_form }}
+
+<table class="table table-bordered table-sm">
+<thead>
+<tr>
+<th>Item</th><th>Opening</th><th>Purchase</th><th>Total</th>
+<th>Sales</th><th>Live Used</th><th>Closing</th><th>Live Closing</th>
+</tr>
+</thead>
+
+<tbody>
+{% for category, items in category_items.items %}
+<tr class="table-secondary">
+<td colspan="8"><b>{{ category.category_name }}</b></td>
+</tr>
+
+{% for form in formset %}
+{% if form.initial.item_obj.category == category %}
+<tr class="item-row"
+    data-category="{{ category.pk }}"
+    data-multiplier="{{ form.initial.multiplier }}"
+    data-is-live="{{ form.initial.item_obj.is_live|yesno:'1,0' }}">
+
+<td>{{ form.initial.item_obj.name }}
+    {{ form.item }}</td>
+<td class="opening">{{ form.opening_stock }}</td>
+<td class="purchase">{{ form.purchase_stock }}</td>
+<td>{{ form.total_stock }}</td>
+<td class="sales">{{ form.todays_sales }}</td>
+<td class="live-used-row">{{ form.live_weight_derived }}</td>
+<td class="closing">{{ form.closing_stock }}</td>
+<td>
+    {{ form.live_weight_closing }}
+</td>
+</tr>
+{% endif %}
+{% endfor %}
+
+<tr class="table-info totals-row"
+    data-category="{{ category.pk }}"
+    data-live-available="{{ category.summary.total_live_available }}"
+    data-live-used="{{ category.summary.live_used }}">
+<td><b>Totals</b></td>
+<td class="t-opening">0</td>
+<td class="t-purchase">0</td>
+<td class="t-total">0</td>
+<td class="t-sales">0</td>
+<td class="t-live-used">{{ category.summary.live_used }}</td>
+<td class="t-closing">0</td>
+<td class="t-live-closing">0</td>
+</tr>
+
+<tr class="table-warning summary-row" data-category="{{ category.pk }}">
+<td colspan="8">
+<b>Expected:</b> <span class="exp-formula"></span><br>
+<b>Actual:</b> <span class="act-formula"></span><br>
+<b>Loss:</b> <span class="loss-formula"></span><br>
+<b>Loss %:</b> <span class="loss-pct-formula"></span>
+</td>
+</tr>
+
+{% endfor %}
+</tbody>
+</table>
+
+<button class="btn btn-success">Save</button>
+</form>
+</div>
+
+<script>
+function num(v){ return parseFloat(v || 0); }
+
+function recalc(catId) {
+  let opening=0,purchase=0,sales=0,closing=0;
+  let totalLiveClosing=0, liveBirdClosing=0;
+
+  document.querySelectorAll(`tr.item-row[data-category="${catId}"]`).forEach(r=>{
+    opening += num(r.querySelector('.opening input')?.value);
+    purchase += num(r.querySelector('.purchase input')?.value);
+    sales += num(r.querySelector('.sales input')?.value);
+    closing += num(r.querySelector('.closing input')?.value);
+
+    const cl = num(r.querySelector('.closing input')?.value);
+    const m  = num(r.dataset.multiplier);
+    const lc = cl * m;
+
+    totalLiveClosing += lc;
+    if (r.dataset.isLive === "1") liveBirdClosing += lc;
+
+    r.querySelector('.live-closing').value = lc.toFixed(3);
+  });
+
+  const t = document.querySelector(`tr.totals-row[data-category="${catId}"]`);
+  t.querySelector('.t-opening').innerText = opening.toFixed(3);
+  t.querySelector('.t-purchase').innerText = purchase.toFixed(3);
+  t.querySelector('.t-total').innerText = (opening + purchase).toFixed(3);
+  t.querySelector('.t-sales').innerText = sales.toFixed(3);
+  t.querySelector('.t-closing').innerText = closing.toFixed(3);
+  t.querySelector('.t-live-closing').innerText = totalLiveClosing.toFixed(3);
+
+  const tla = num(t.dataset.liveAvailable);
+  const lu  = num(t.dataset.liveUsed);
+
+  const expected = tla - lu;
+  const actual = liveBirdClosing + totalLiveClosing;
+  const loss = expected - actual;
+  const lossPct = tla > 0 ? (loss / tla) * 100 : 0;
+
+  const s = document.querySelector(`tr.summary-row[data-category="${catId}"]`);
+  s.querySelector('.exp-formula').innerText =
+    `Expected = ${tla.toFixed(2)} - ${lu.toFixed(2)} = ${expected.toFixed(2)}`;
+  s.querySelector('.act-formula').innerText =
+    `Actual = ${liveBirdClosing.toFixed(2)} + ${totalLiveClosing.toFixed(2)} = ${actual.toFixed(2)}`;
+  s.querySelector('.loss-formula').innerText =
+    `Loss = ${expected.toFixed(2)} - ${actual.toFixed(2)} = ${loss.toFixed(2)}`;
+  s.querySelector('.loss-pct-formula').innerText =
+    `Loss % = (${loss.toFixed(2)} / ${tla.toFixed(2)}) × 100 = ${lossPct.toFixed(2)} %`;
+}
+
+document.querySelectorAll('.closing input').forEach(i=>{
+  i.addEventListener('input',()=>recalc(i.closest('tr').dataset.category));
+});
+
+document.querySelectorAll('tr.totals-row').forEach(r=>recalc(r.dataset.category));
+</script>
+
+{% endblock %}

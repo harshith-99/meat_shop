@@ -91,10 +91,19 @@ urlpatterns = [
     # urls.py
     path('employee-login/create/', views.employee_login_create, name='employee_login_create'),
 
+    #YieldPercentage values Urls
+    path('YieldPercentage-values/', views.YieldPercentage_value_list, name='YieldPercentage_value_list'),
+    path('YieldPercentage-values/add', views.YieldPercentage_add, name='YieldPercentage_add'),
+    path('YieldPercentage-values/<int:pk>/update', views.YieldPercentage_update, name='YieldPercentage_update'),
+    
+    # Daily Stock Update (new)
+    path('daily-stock/update/', views.daily_stock_update, name='daily_stock_update'),
+
     #Reports
     path('retail-item-report/', views.retail_item_report, name='retail_item_report'),
     path('wholesale-item-report/', views.wholesale_item_report, name='wholesale_item_report'),
     path('wholesale-payments/', views.wholesale_payment_list, name='wholesale_payment_list'),
+    path('daily-stock/report/', views.daily_stock_report, name='daily_stock_report'),
 
     path('wholesale-payment/add/', views.wholesale_payment_add, name='wholesale_payment_add'),
     

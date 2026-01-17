@@ -1,9 +1,48 @@
 from django import forms
-from .models import ExpenseCategory,Expense,CustomUser,Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance,WholesalePayment
+from .models import DailystockUpdate,YieldPercentage,ExpenseCategory,Expense,CustomUser,Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance,WholesalePayment
 from django.forms import modelformset_factory
 from django.forms import inlineformset_factory
 from django.core.exceptions import ValidationError
 from decimal import Decimal
+
+class DailyStockUpdateForm(forms.ModelForm):
+    class Meta:
+        model = DailystockUpdate
+        fields = [
+            'item', 'opening_stock', 'purchase_stock', 'total_stock',
+            'todays_sales', 'live_weight_derived', 'closing_stock', 'live_weight_closing'
+        ]
+        widgets = {
+            'item': forms.HiddenInput(),
+            'opening_stock': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+            'purchase_stock': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+            'total_stock': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+            'todays_sales': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+            'live_weight_derived': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+            'closing_stock': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001'}),
+            'live_weight_closing': forms.NumberInput(attrs={
+                'class': 'form-control live-closing',
+                'readonly': 'readonly'
+            }),
+        }
+
+class YieldPercentageForm(forms.ModelForm):
+    item = forms.ModelChoiceField(
+        queryset=Item.objects.all().select_related('category').order_by(
+            'category__category_name', 'name'   # First by category, then by item name
+        ),
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        required=True
+    )
+    yeild_percentage = forms.DecimalField(
+        widget = forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off', 'step': '0.01'})
+    )
+    multipler = forms.DecimalField(
+        widget = forms.NumberInput(attrs = {'class' :'form-control','autocomplete': 'off', 'step': '0.01'})
+    )
+    class Meta:
+        model = YieldPercentage
+        fields = ['item','yeild_percentage','multipler']
 
 class ExpenseCategoryForm(forms.ModelForm):
     expense_name = forms.CharField(

@@ -6,9 +6,8 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.db import transaction
-from decimal import Decimal, InvalidOperation
-from .forms import ExpenseCategoryForm,ExpenseForm,EmployeeLoginForm,PurchaseForm, PurchaseDetailFormSet, ItemCategoryForm, BranchForm, SupplierForm, ItemForm, RetailSalesForm, RetailSalesDetailFormSet, CustomerDataForm, WholesaleSalesForm, WholesaleSalesDetailFormSet,SupplierpayForm,EmployeForm,AttendanceInlineForm,CustomerForm,WholesalePaymentForm
-from .models import ExpenseCategory,Expense,Purchase, PurchaseDetail, Branch, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance,WholesalePayment
+from .forms import DailyStockUpdateForm,YieldPercentageForm,ExpenseCategoryForm,ExpenseForm,EmployeeLoginForm,PurchaseForm, PurchaseDetailFormSet, ItemCategoryForm, BranchForm, SupplierForm, ItemForm, RetailSalesForm, RetailSalesDetailFormSet, CustomerDataForm, WholesaleSalesForm, WholesaleSalesDetailFormSet,SupplierpayForm,EmployeForm,AttendanceInlineForm,CustomerForm,WholesalePaymentForm
+from .models import DailystockUpdate,YieldPercentage,ExpenseCategory,Expense,Purchase, PurchaseDetail, Branch, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance,WholesalePayment
 import logging
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
@@ -16,9 +15,389 @@ from django.http import HttpRequest
 from datetime import datetime, date,timedelta
 from django.contrib.auth.hashers import make_password
 from django.db import models
-from decimal import Decimal
+from decimal import Decimal,ROUND_HALF_UP
+from django.utils import timezone
+from django.db.models import IntegerField
+from django.db.models.functions import Cast
+from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
+
+@login_required
+def daily_stock_report(request):
+
+    from collections import OrderedDict
+    from decimal import Decimal, ROUND_HALF_UP
+    from django.shortcuts import get_object_or_404
+
+    user = request.user
+    role = user.role
+    today = timezone.now().date()
+
+    # ───────── DATE ─────────
+    selected_date = request.GET.get('date', today)
+    try:
+        selected_date = datetime.strptime(str(selected_date), '%Y-%m-%d').date()
+    except Exception:
+        selected_date = today
+
+    # ───────── BRANCH ─────────
+    if role in ['admin', 'super_admin']:
+        branch_id = request.GET.get('branch')
+        branch = get_object_or_404(Branch, pk=branch_id) if branch_id else user.branch
+    else:
+        branch = user.branch
+
+    # ───────── RECORDS ─────────
+    records = (
+        DailystockUpdate.objects
+        .filter(date=selected_date, branch=branch)
+        .select_related('item', 'item__category')
+        .order_by('item__category__category_id', 'item__code')
+    )
+
+    category_items = OrderedDict()
+    category_summary = {}
+
+    for r in records:
+        category_items.setdefault(r.item.category, []).append(r)
+
+    # ───────── CALCULATIONS (MATCH JS EXACTLY) ─────────
+    for category, rows in category_items.items():
+        cid = category.pk
+
+        summary = {
+            'opening': Decimal('0'),
+            'purchase': Decimal('0'),
+            'total_stock': Decimal('0'),
+            'sales': Decimal('0'),
+            'live_used': Decimal('0'),
+            'closing': Decimal('0'),
+            'live_closing': Decimal('0'),       # totalLiveClosing
+            'live_bird_closing': Decimal('0'),  # only live birds
+            'total_live_available': Decimal('0'),
+        }
+
+        for r in rows:
+            summary['opening'] += r.opening_stock
+            summary['purchase'] += r.purchase_stock
+            summary['total_stock'] += r.total_stock
+            summary['sales'] += r.todays_sales
+            summary['live_used'] += r.live_weight_derived
+            summary['closing'] += r.closing_stock
+            summary['live_closing'] += r.live_weight_closing
+
+            if r.item.is_live:
+                summary['total_live_available'] += r.total_stock
+                summary['live_bird_closing'] += r.live_weight_closing
+
+        # ─── FINAL VALUES (JS FORMULA) ───
+        summary['expected'] = (
+            summary['total_live_available'] - summary['live_used']
+        ).quantize(Decimal('0.000'), rounding=ROUND_HALF_UP)
+
+        summary['actual'] = (
+            summary['live_bird_closing'] + summary['live_closing']
+        ).quantize(Decimal('0.000'), rounding=ROUND_HALF_UP)
+
+        summary['loss'] = (
+            summary['expected'] - summary['actual']
+        ).quantize(Decimal('0.000'), rounding=ROUND_HALF_UP)
+
+        summary['loss_pct'] = (
+            (summary['loss'] / summary['total_live_available']) * 100
+            if summary['total_live_available'] > 0 else Decimal('0.00')
+        )
+
+        category_summary[cid] = summary
+        category.summary = summary
+
+    return render(request, 'daily_stock_report.html', {
+        'category_items': category_items,
+        'selected_date': selected_date,
+        'branch': branch,
+        'branches': Branch.objects.all(),
+        'role': role,
+    })
+
+
+
+
+@login_required
+def daily_stock_update(request):
+
+    from collections import OrderedDict
+    from decimal import Decimal, ROUND_HALF_UP
+    from django.forms import modelformset_factory
+    from django.db.models.functions import Cast
+    from django.db.models import IntegerField
+    from django.shortcuts import get_object_or_404
+
+    user = request.user
+    role = user.role
+    today = timezone.now().date()
+
+    # ───────── DATE ─────────
+    if role == 'super_admin':
+        selected_date = request.GET.get('date', today)
+        try:
+            selected_date = datetime.strptime(str(selected_date), '%Y-%m-%d').date()
+        except Exception:
+            selected_date = today
+    else:
+        selected_date = today
+
+    # ───────── BRANCH ─────────
+    if role in ['admin', 'super_admin']:
+        branch_id = request.GET.get('branch')
+        branch = get_object_or_404(Branch, pk=branch_id) if branch_id else user.branch
+    else:
+        branch = user.branch
+
+    # ───────── ITEMS ─────────
+    items_qs = (
+        Item.objects
+        .filter(category__category_id__in=[1, 5, 6, 7])
+        .annotate(code_int=Cast('code', IntegerField()))
+        .select_related('category')
+        .order_by('category__category_id', 'code_int')
+    )
+
+    # ───────── GROUP BY CATEGORY ─────────
+    category_items = OrderedDict()
+    for item in items_qs:
+        category_items.setdefault(item.category, []).append(item)
+
+    for cat, items in category_items.items():
+        live_items = [i for i in items if i.is_live]
+        non_live_items = sorted(
+            [i for i in items if not i.is_live],
+            key=lambda x: x.code_int or 0
+        )
+        category_items[cat] = live_items + non_live_items
+
+    # ───────── EXISTING RECORDS ─────────
+    existing = DailystockUpdate.objects.filter(
+        date=selected_date,
+        branch=branch
+    ).select_related('item')
+
+    existing_map = {e.item_id: e for e in existing}
+
+    initial_data = []
+    category_summary = {}
+
+    # ───────── BUILD DATA ─────────
+    for category, items in category_items.items():
+        cid = category.pk
+
+        category_summary[cid] = {
+            'opening': Decimal('0'),
+            'purchase': Decimal('0'),
+            'sales': Decimal('0'),
+            'closing_stock': Decimal('0'),
+            'live_closing': Decimal('0'),
+            'live_bird_closing': Decimal('0'),  # ✅ REQUIRED
+            'total_live_available': Decimal('0'),
+            'live_used': Decimal('0'),
+        }
+
+        for item in items:
+            yp = item.yieldpercentage_set.first()
+            multiplier = yp.multipler if yp else Decimal('1')
+
+            opening = get_previous_closing_stock(item, selected_date, branch)
+            purchase = get_purchase_stock(item, selected_date, branch)
+            sales = get_todays_sales(item, selected_date, branch)
+            total_stock = opening + purchase
+
+            # Live used
+            if item.is_live:
+                category_summary[cid]['total_live_available'] += total_stock
+                live_used = (sales * multiplier).quantize(
+                    Decimal('0.000'), rounding=ROUND_HALF_UP
+                )
+            else:
+                live_used = ((sales - purchase) * multiplier).quantize(
+                    Decimal('0.000'), rounding=ROUND_HALF_UP
+                )
+
+            existing_row = existing_map.get(item.id)
+            closing_stock = existing_row.closing_stock if existing_row else Decimal('0')
+
+            # ✅ STEP 2 — MATCH JS EXACTLY
+            live_closing = (closing_stock * multiplier).quantize(
+                Decimal('0.000'), rounding=ROUND_HALF_UP
+            )
+
+            category_summary[cid]['opening'] += opening
+            category_summary[cid]['purchase'] += purchase
+            category_summary[cid]['sales'] += sales
+            category_summary[cid]['closing_stock'] += closing_stock
+            category_summary[cid]['live_closing'] += live_closing
+            category_summary[cid]['live_used'] += live_used
+
+            if item.is_live:
+                category_summary[cid]['live_bird_closing'] += live_closing
+
+            initial_data.append({
+                'item': item.id,
+                'item_obj': item,
+                'multiplier': multiplier,
+                'opening_stock': opening,
+                'purchase_stock': purchase,
+                'total_stock': total_stock,
+                'todays_sales': sales,
+                'closing_stock': closing_stock,
+                'live_weight_derived': live_used,
+                'live_weight_closing': live_closing,
+            })
+
+    # ───────── FINAL CALCULATIONS (MATCH JS) ─────────
+    for s in category_summary.values():
+        s['expected'] = (s['total_live_available'] - s['live_used']).quantize(
+            Decimal('0.000'), rounding=ROUND_HALF_UP
+        )
+
+        s['actual'] = (
+            s['live_bird_closing'] + s['live_closing']
+        ).quantize(Decimal('0.000'), rounding=ROUND_HALF_UP)
+
+        s['loss'] = (s['expected'] - s['actual']).quantize(
+            Decimal('0.000'), rounding=ROUND_HALF_UP
+        )
+
+        s['loss_pct'] = (
+            (s['loss'] / s['total_live_available']) * 100
+            if s['total_live_available'] > 0 else Decimal('0.00')
+        )
+
+    for cat in category_items:
+        cat.summary = category_summary[cat.pk]
+
+    # ───────── FORMSET ─────────
+    DailyStockFormSet = modelformset_factory(
+        DailystockUpdate,
+        form=DailyStockUpdateForm,
+        extra=len(initial_data),
+        can_delete=False
+    )
+
+    formset = DailyStockFormSet(
+        request.POST or None,
+        queryset=existing,
+        initial=initial_data
+    )
+
+    # ───────── SAVE ─────────
+    if request.method == 'POST' and formset.is_valid():
+
+        for form, init in zip(formset.forms, initial_data):
+
+            instance = form.save(commit=False)
+
+            # ✅ FORCE item assignment (CRITICAL FIX)
+            item = form.cleaned_data.get('item')
+            if not item:
+                item = Item.objects.get(pk=init['item'])
+
+            instance.item = item
+            instance.date = selected_date
+            instance.branch = branch
+            instance.updated_by = user
+
+            # ✅ Live closing calculation (MATCH JS)
+            yp = item.yieldpercentage_set.first()
+            multiplier = yp.multipler if yp else Decimal('1')
+
+            closing_stock = Decimal(str(instance.closing_stock))
+            multiplier = Decimal(str(multiplier))
+
+            instance.live_weight_closing = (
+                closing_stock * multiplier
+            ).quantize(Decimal('0.000'), rounding=ROUND_HALF_UP)
+            instance.save()
+
+        messages.success(request, "Daily stock updated successfully")
+        return redirect('daily_stock_update')
+
+    return render(request, 'daily_stock_update.html', {
+        'formset': formset,
+        'category_items': category_items,
+        'selected_date': selected_date,
+        'branch': branch,
+        'branches': Branch.objects.all(),
+        'role': role,
+    })
+
+
+
+# Helper functions remain the same
+def get_previous_closing_stock(item, current_date, branch):
+    prev = DailystockUpdate.objects.filter(
+        item=item,
+        branch=branch,
+        date__lt=current_date
+    ).order_by('-date').first()
+    return prev.closing_stock if prev else Decimal('0.000')
+
+
+def get_purchase_stock(item, date, branch):
+    total = PurchaseDetail.objects.filter(
+        item=item,
+        purchase__purchase_date=date,
+        purchase__branch=branch,
+        purchase__delete_status=False
+    ).aggregate(total=Sum('net_weight'))['total'] or Decimal('0.000')
+    return total
+
+
+def get_todays_sales(item, date, branch):
+    retail = RetailSalesDetails.objects.filter(
+        item=item,
+        sales__sales_date=date,
+        sales__branch=branch,
+        sales__delete_status=False
+    ).aggregate(total=Sum('net_weight'))['total'] or Decimal('0.000')
+
+    wholesale = WholesaleSalesDetails.objects.filter(
+        item=item,
+        sales__sales_date=date,
+        sales__branch=branch,
+        sales__delete_status=False
+    ).aggregate(total=Sum('net_weight'))['total'] or Decimal('0.000')
+
+    return retail + wholesale
+
+@login_required
+def YieldPercentage_add(request):
+    if request.method =="POST":
+        form = YieldPercentageForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request,"Values are added")
+            return redirect('YieldPercentage_value_list')
+    else:
+        form = YieldPercentageForm()
+    return render(request,'add_YieldPercentage_value.html',{'form': form})
+
+@login_required    
+def YieldPercentage_value_list(request):
+    YieldPercentage_values = YieldPercentage.objects.filter()
+    return render(request,'YieldPercentage_value_list.html',{'YieldPercentage_values':YieldPercentage_values})
+
+@login_required
+def YieldPercentage_update(request,pk):
+    wastage_Values = get_object_or_404(YieldPercentage,pk=pk)
+    if request.method =="POST":
+        form = YieldPercentageForm(request.POST, instance = wastage_Values)
+        if form.is_valid():
+            form.save()
+            messages.success(request,"Valued are Updated")
+            return redirect('YieldPercentage_value_list')
+    else:
+        form = YieldPercentageForm(instance = wastage_Values)
+    return render(request, 'add_YieldPercentage_value.html',{'form': form, 'wastage_Values':wastage_Values})
 
 
 @login_required

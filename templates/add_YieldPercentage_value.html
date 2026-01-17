@@ -1,0 +1,58 @@
+{% load static %}
+{% include "sidebar/sidebar.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">Add Yeild Values</h1>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <!-- <h6 class="m-0 font-weight-bold text-primary">Item Details</h6> -->
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+
+                {% for field in form %}
+                <div class="form-group col-md-6">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}  {# Already has Bootstrap class from form #}
+
+                    {% if field.errors %}
+                        <small class="text-danger">{{ field.errors }}</small>
+                    {% endif %}
+                    {% if field.help_text %}
+                        <small class="form-text text-muted">{{ field.help_text }}</small>
+                    {% endif %}
+                </div>
+                {% endfor %}
+
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a href="{% url 'YieldPercentage_value_list' %}" class="btn btn-secondary">Cancel</a>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const yeild_percentage = document.getElementById("id_yeild_percentage");
+    const multipler = document.getElementById("id_multipler");
+
+    if (!yeild_percentage || !multipler) {
+        console.error("Input elements not found");
+        return;
+    }
+
+    yeild_percentage.addEventListener("input", function () {
+        const value = parseFloat(yeild_percentage.value);
+
+        if (!isNaN(value) && value > 0) {
+            multipler.value = (1 / (value / 100)).toFixed(2);
+        } else {
+            multipler.value = "";
+        }
+    });
+});
+</script>
+
+{% endblock %}

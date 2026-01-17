@@ -151,6 +151,7 @@
                         <a class="collapse-item" href="{% url 'purchase_list' %}">Purchase Report</a>
                         <a class="collapse-item" href="{% url 'supplier_payment_list' %}">Supplier Payment Report</a>
                         <a class="collapse-item" href="{% url 'wholesale_payment_list' %}">Wholesale Payment Report</a>
+                        <a class="collapse-item" href="{% url 'daily_stock_report' %}">Daily Stock Report</a>
                     </div>
                     
                 </div>
@@ -193,17 +194,36 @@
             </li>
             {% endif %}
 
+            {% if request.user.role == 'admin' or request.user.role == 'super_admin' or request.user.role == 'manager'%}
+
+            <li class="nav-item">
+                <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapsePages8"
+                    aria-expanded="true" aria-controls="collapsePages8">
+                    <i class="fas fa-fw fa-folder"></i>
+                    <span>Daily stock update</span>
+                </a>
+                
+                <div id="collapsePages8" class="collapse" aria-labelledby="headingPages" data-parent="#accordionSidebar">
+                    <div class="bg-white py-2 collapse-inner rounded">
+                        <a class="collapse-item" href="{% url 'daily_stock_update' %}">Update Stock</a>
+                    </div>
+                </div>
+            </li>
+            {% endif %}
+
          {% if request.user.role == 'super_admin' %}
+
+             <li class="nav-item">
+                <a class="nav-link" href="{% url 'YieldPercentage_value_list' %}">
+                    <i class="fas fa-fw fa-table"></i>
+                    <span>Add Yield Ratio</span></a>
+            </li>
 
             <li class="nav-item">
                 <a class="nav-link" href="{% url 'branch_list' %}">
                     <i class="fas fa-fw fa-table"></i>
                     <span>Branch</span></a>
             </li>
-
-         {% endif %}
-
-         {% if request.user.role == 'super_admin' %}
 
             <li class="nav-item">
                 <a class="nav-link" href="{% url 'employee_login_create' %}">

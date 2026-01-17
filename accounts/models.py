@@ -77,6 +77,7 @@ class Item(models.Model):
         ('pkt', 'Packet'),
     ])
     stock = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # weight or qty
+    is_live = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.name} ({self.category.category_name})"
@@ -283,3 +284,30 @@ class Expense(models.Model):
     staff = models.ForeignKey(Employe, on_delete=models.PROTECT, null=True, blank=True)
     delete_status = models.BooleanField(default=False)
     branch = models.ForeignKey(Branch, on_delete=models.CASCADE, null=True, blank=True)
+
+class YieldPercentage(models.Model):
+    item = models.ForeignKey(Item,on_delete=models.CASCADE)
+    yeild_percentage = models.DecimalField(max_digits=12, decimal_places=3,default='0.000')
+    multipler = models.DecimalField(max_digits=12, decimal_places=3,default='0.000')
+
+
+class DailystockUpdate(models.Model):
+    item = models.ForeignKey(Item, on_delete=models.CASCADE)
+    date = models.DateField()
+    opening_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    purchase_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    total_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    todays_sales = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    live_weight_derived = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    closing_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)  # ← Manual
+    live_weight_closing = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, null=True, blank=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('item', 'date', 'branch')  # One record per item per day per branch
+        ordering = ['-date', 'item__name']
+
+    def __str__(self):
+        return f"{self.item.name} - {self.date}"

@@ -1,0 +1,95 @@
+{% load static %}
+{% include "sidebar/sidebar.html" %}
+{% block content %}
+<div class="container mt-4">
+
+<h3>Daily Stock Report – {{ selected_date }}</h3>
+
+<form method="get" class="row g-2 mb-3">
+  {% if role in 'admin super_admin' %}
+  <div class="col-md-3">
+    <select name="branch" class="form-control">
+      {% for b in branches %}
+        <option value="{{ b.pk }}" {% if b == branch %}selected{% endif %}>
+          {{ b.branch_name }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+
+  <div class="col-md-3">
+    <input type="date" name="date" class="form-control" value="{{ selected_date }}">
+  </div>
+
+  <div class="col-md-2">
+    <button class="btn btn-primary">View</button>
+  </div>
+</form>
+
+<table class="table table-bordered table-sm">
+<thead>
+<tr class="table-light">
+<th>Item</th>
+<th>Opening</th>
+<th>Purchase</th>
+<th>Total</th>
+<th>Sales</th>
+<th>Live Used</th>
+<th>Closing</th>
+<th>Live Closing</th>
+</tr>
+</thead>
+
+<tbody>
+{% for category, rows in category_items.items %}
+<tr class="table-secondary">
+<td colspan="8"><b>{{ category.category_name }}</b></td>
+</tr>
+
+{% for r in rows %}
+<tr>
+<td>{{ r.item.name }}</td>
+<td>{{ r.opening_stock }}</td>
+<td>{{ r.purchase_stock }}</td>
+<td>{{ r.total_stock }}</td>
+<td>{{ r.todays_sales }}</td>
+<td>{{ r.live_weight_derived }}</td>
+<td>{{ r.closing_stock }}</td>
+<td>{{ r.live_weight_closing }}</td>
+</tr>
+{% endfor %}
+
+<tr class="table-info">
+<td><b>Totals</b></td>
+<td>{{ category.summary.opening }}</td>
+<td>{{ category.summary.purchase }}</td>
+<td>{{ category.summary.total_stock }}</td>
+<td>{{ category.summary.sales }}</td>
+<td>{{ category.summary.live_used }}</td>
+<td>{{ category.summary.closing }}</td>
+<td>{{ category.summary.live_closing }}</td>
+</tr>
+
+<tr class="table-warning">
+<td colspan="8">
+<b>Expected:</b>
+{{ category.summary.total_live_available }} - {{ category.summary.live_used }}
+= {{ category.summary.expected }} kg
+&nbsp; | &nbsp;
+<b>Actual:</b>
+{{ category.summary.live_bird_closing }} + {{ category.summary.live_closing }}
+= {{ category.summary.actual }} kg
+&nbsp; | &nbsp;
+<b>Loss:</b> {{ category.summary.loss }} kg
+&nbsp; | &nbsp;
+<b>Loss %:</b> {{ category.summary.loss_pct|floatformat:2 }} %
+</td>
+</tr>
+
+{% endfor %}
+</tbody>
+</table>
+
+</div>
+{% endblock %}
