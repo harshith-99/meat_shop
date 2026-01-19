@@ -24,6 +24,22 @@ from collections import OrderedDict
 logger = logging.getLogger(__name__)
 
 @login_required
+def toggle_category_stock(request, pk):
+    if request.user.role not in ['admin', 'super_admin']:
+        messages.error(request, "Permission denied")
+        return redirect('category_list')
+
+    category = get_object_or_404(ItemCategory, pk=pk)
+    category.include_in_stock_update = not category.include_in_stock_update
+    category.save()
+
+    messages.success(
+        request,
+        f"{category.category_name} updated for stock update"
+    )
+    return redirect('category_list')
+
+@login_required
 def daily_stock_report(request):
 
     from collections import OrderedDict
@@ -157,7 +173,7 @@ def daily_stock_update(request):
     # ───────── ITEMS ─────────
     items_qs = (
         Item.objects
-        .filter(category__category_id__in=[1, 5, 6, 7])
+        .filter(category__include_in_stock_update=True)
         .annotate(code_int=Cast('code', IntegerField()))
         .select_related('category')
         .order_by('category__category_id', 'code_int')

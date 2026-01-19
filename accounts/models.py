@@ -58,6 +58,7 @@ class ItemCategory(models.Model):
     category_name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
     is_weight_based = models.BooleanField(default=True)  # True = sold by weight, False = sold by quantity
+    include_in_stock_update = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name

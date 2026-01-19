@@ -30,7 +30,8 @@ urlpatterns = [
     path('category_list/', views.item_category_list, name='category_list'),
     path('category_add/', views.item_category_add, name='category_add'),
     path('category_delete/<int:pk>/', views.item_category_delete, name='category_delete'),
-    path('category_update/<int:pk>/', views.item_category_update, name='category_update'),  
+    path('category_update/<int:pk>/', views.item_category_update, name='category_update'),
+    path('category/toggle-stock/<int:pk>/',views.toggle_category_stock,name='toggle_category_stock'),  
 
     # Items URLs 
     path('item_add/', views.item_add, name='item_add'),
