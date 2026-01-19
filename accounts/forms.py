@@ -388,10 +388,16 @@ class ItemForm(forms.ModelForm):
             'step': '0.01'
         })
     )
+    is_live = forms.BooleanField(
+        required=False,
+        label="Is Live Weight Item?",
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input','style': 'margin-left: 7px;'})
+    )
+
 
     class Meta:
         model = Item
-        fields = ['name', 'code', 'category', 'price_per_unit_retail', 'price_per_unit_wholesale', 'unit', 'stock']
+        fields = ['name', 'code', 'category', 'price_per_unit_retail', 'price_per_unit_wholesale', 'unit', 'stock','is_live']
 
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
