@@ -47,11 +47,15 @@
                 {% endif %}
                 {% endif %}
 
-                <div class="col-md-3 align-self-end">
+                <div class="col-md-4 align-self-end" style="margin-top: 13px;">
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-filter"></i> Apply Filter
                     </button>
                     <a href="{% url 'retail_item_report' %}" class="btn btn-secondary">Clear</a>
+                    <a href="?from_date={{ from_date }}&to_date={{ to_date }}{% if selected_branch %}&branch={{ selected_branch.branch_id }}{% endif %}&export=pdf"
+                    class="btn btn-danger">
+                        <i class="fas fa-file-pdf"></i> Export PDF
+                    </a>
                 </div>
             </form>
         </div>

@@ -1,6 +1,9 @@
+from django.templatetags.static import static
 from django.shortcuts import render, redirect, get_object_or_404
 from django.db.models import Sum, F, Q
 from django.contrib import messages
+from django.conf import settings
+import os
 from django.forms import modelformset_factory
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -20,8 +23,30 @@ from django.utils import timezone
 from django.db.models import IntegerField
 from django.db.models.functions import Cast
 from collections import OrderedDict
+import base64
+from django.http import HttpResponse
+from django.template.loader import render_to_string
+from xhtml2pdf import pisa
+from io import BytesIO
+from django.utils.timezone import now
 
 logger = logging.getLogger(__name__)
+
+logo_path = os.path.join(
+    settings.BASE_DIR,
+    'static',
+    'img',
+    'jaan_logo.jpeg'
+)
+
+def render_to_pdf(template_src, context):
+    html = render_to_string(template_src, context)
+    result = BytesIO()
+    pisa_status = pisa.CreatePDF(html, dest=result)
+
+    if pisa_status.err:
+        return None
+    return result.getvalue()
 
 @login_required
 def toggle_category_stock(request, pk):
@@ -667,6 +692,8 @@ def wholesale_payment_list(request):
 
     payments = payments.order_by('-payment_date')
 
+    
+
     # Customer balance calculation
     customers = Customer.objects.filter(whole_sale=True, delete_status=False)
     if not is_admin_like and user.branch:
@@ -684,13 +711,17 @@ def wholesale_payment_list(request):
             delete_status=False
         ).aggregate(paid=Sum('amount'))['paid'] or Decimal('0.00')
 
-        balance = total_sales - total_paid
+        opening_balance = cust.opening_balance or Decimal('0.00')
+
+        balance = opening_balance + total_sales - total_paid
+
         if balance > 0:  # Only show if pending
             customer_stats.append({
                 'customer': cust,
                 'total_sales': total_sales,
                 'total_paid': total_paid,
-                'balance': balance
+                'balance': balance,
+                'opening_balance': opening_balance
             })
 
     context = {
@@ -708,8 +739,10 @@ def wholesale_item_report(request):
     
     # Get filter parameters
     branch_id = request.GET.get('branch')
+    customer_id = request.GET.get('customer')
     from_date_str = request.GET.get('from_date')
     to_date_str = request.GET.get('to_date')
+    export_type = request.GET.get('export')
 
     today = date.today()
     from_date = from_date_str or today.strftime('%Y-%m-%d')
@@ -739,6 +772,8 @@ def wholesale_item_report(request):
 
     # Apply branch filter
     selected_branch = None
+    selected_customer = None
+
     if is_admin_like:
         if branch_id and branch_id.isdigit():
             details_qs = details_qs.filter(sales__branch_id=branch_id)
@@ -750,6 +785,11 @@ def wholesale_item_report(request):
             selected_branch = request.user.branch
         else:
             details_qs = details_qs.none()
+
+    #apply customer filter
+    if customer_id:
+        details_qs = details_qs.filter(sales__customer_id=customer_id)
+        selected_customer = Customer.objects.filter(id=customer_id).first()
 
     # Group by Customer → Item
     report_data = {}
@@ -779,6 +819,7 @@ def wholesale_item_report(request):
         item_data['total_net_weight'] += detail.net_weight or Decimal('0.00')
         item_data['total_amount'] += detail.total_amount or Decimal('0.00')
 
+
     # Sort customers alphabetically
     sorted_report = dict(sorted(report_data.items()))
 
@@ -787,10 +828,34 @@ def wholesale_item_report(request):
         'is_admin_like': is_admin_like,
         'branches': Branch.objects.all() if is_admin_like else [],
         'selected_branch': selected_branch,
+        'customers': Customer.objects.filter(whole_sale=True, delete_status=False),
+        'selected_customer': selected_customer,
         'from_date': from_date,
         'to_date': to_date,
         'today': today.strftime('%Y-%m-%d'),
+        'logo_path': logo_path,
     }
+
+    # ================= PDF EXPORT ⭐ NEW =================
+    if export_type == 'pdf':
+        today_str = now().strftime('%Y-%m-%d')
+
+        if selected_customer:
+            cust_name = selected_customer.customer_name.replace(' ', '_')
+        else:
+            cust_name = 'All_Customers'
+
+        filename = f"{today_str}-{cust_name}.pdf"
+
+        pdf = render_to_pdf('wholesale_item_report_pdf.html', context)
+
+        if not pdf:
+            return HttpResponse("PDF generation error", status=500)
+
+        response = HttpResponse(pdf, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+    
     return render(request, 'wholesale_item_report.html', context)
 
 @login_required(login_url='login')
@@ -862,6 +927,7 @@ def retail_item_report(request):
     branch_id = request.GET.get('branch')
     from_date_str = request.GET.get('from_date')
     to_date_str = request.GET.get('to_date')
+    export_type = request.GET.get('export')
 
     # Default: today
     today = date.today()
@@ -922,7 +988,24 @@ def retail_item_report(request):
         'from_date': from_date,
         'to_date': to_date,
         'today': today.strftime('%Y-%m-%d'),
+        'logo_path': logo_path,
     }
+
+    if export_type == 'pdf':
+        today_str = now().strftime('%Y-%m-%d')
+
+        filename = f"{today_str}-retail-item-report.pdf"
+
+        pdf = render_to_pdf('retail_item_report_pdf.html', context)
+
+        if not pdf:
+            return HttpResponse("PDF generation error", status=500)
+
+        response = HttpResponse(pdf, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+    
+    
     return render(request, 'retail_item_report.html', context)
 
 @login_required

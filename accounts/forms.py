@@ -591,7 +591,7 @@ class CustomerForm(forms.ModelForm):
 
     class Meta:
         model = Customer
-        fields = ['customer_name', 'customer_phone', 'customer_address', 'gstin', 'whole_sale']
+        fields = ['customer_name', 'customer_phone', 'customer_address', 'gstin','opening_balance', 'whole_sale']
 
     customer_name = forms.CharField(
         widget=forms.TextInput(attrs={
@@ -624,6 +624,11 @@ class CustomerForm(forms.ModelForm):
         }),
         required=False  # Important: allow blank
     )
+    opening_balance = forms.DecimalField(
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Opening Balance', 'autocomplete': 'off','style': 'width: 100%;'
+            }))
 
     def clean_customer_phone(self):
         phone = self.cleaned_data.get('customer_phone', '').strip()

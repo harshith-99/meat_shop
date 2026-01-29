@@ -22,6 +22,18 @@
                     <input type="date" name="to_date" class="form-control" value="{{ to_date }}">
                 </div>
 
+                <div class="col-md-3">
+                    <label class="form-label">Customer</label>
+                    <select name="customer" class="form-control">
+                        <option value="">-- All Customer --</option>
+                        {% for Customer in customers %}
+                        <option value="{{ Customer.id }}" {% if selected_customer.id == Customer.id %}selected{% endif %}>
+                            {{ Customer.customer_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
                 {% if is_admin_like %}
                 <div class="col-md-3">
                     <label class="form-label">Branch</label>
@@ -44,11 +56,17 @@
                 {% endif %}
                 {% endif %}
 
-                <div class="col-md-3 align-self-end">
+                <div class="col-md-4 align-self-end" style="margin-top: 13px;">
                     <button type="submit" class="btn btn-success">
                         <i class="fas fa-filter"></i> Apply Filter
                     </button>
+                     
                     <a href="{% url 'wholesale_item_report' %}" class="btn btn-secondary">Clear</a>
+                    <a href="?from_date={{ from_date }}&to_date={{ to_date }}{% if selected_branch %}&branch={{ selected_branch.branch_id }}{% endif %}{% if selected_customer %}&customer={{ selected_customer.id }}{% endif %}&export=pdf"
+                    class="btn btn-danger">
+                        <i class="fas fa-file-pdf"></i> Export PDF
+                    </a>
+                   
                 </div>
             </form>
         </div>

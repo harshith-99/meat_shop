@@ -40,6 +40,7 @@
                     <th>Address</th>
                     <th class="sortable" data-sort="gstin">GSTIN <i class="fas fa-sort ms-1"></i></th>
                     <th class="sortable" data-sort="wholesale">Wholesale <i class="fas fa-sort ms-1"></i></th>
+                    <th class="sortable" data-sort="wholesale">Opening Balance <i class="fas fa-sort ms-1"></i></th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -58,6 +59,7 @@
                             <span class="text-muted">Retail</span>
                         {% endif %}
                     </td>
+                    <td class="gstin">{{ customer.opening_balance }}</td>
                     <td>
                         <a href="{% url 'customer_update' customer.pk %}" class="btn btn-warning btn-sm">Edit</a>
                         <a href="{% url 'customer_delete' customer.pk %}" class="btn btn-danger btn-sm ms-1"

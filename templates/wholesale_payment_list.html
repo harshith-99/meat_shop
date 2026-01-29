@@ -16,6 +16,7 @@
                     <thead>
                         <tr>
                             <th>Customer</th>
+                            <th>Opening Balance</th>
                             <th>Total Sales</th>
                             <th>Total Paid</th>
                             <th>Pending Balance</th>
@@ -26,6 +27,7 @@
                         {% for stat in customer_stats %}
                         <tr class="table-warning">
                             <td><strong>{{ stat.customer.customer_name }}</strong></td>
+                            <td>₹{{ stat.opening_balance|floatformat:2|intcomma }}</td>
                             <td>₹{{ stat.total_sales|floatformat:2|intcomma }}</td>
                             <td>₹{{ stat.total_paid|floatformat:2|intcomma }}</td>
                             <td class="text-danger fw-bold">₹{{ stat.balance|floatformat:2|intcomma }}</td>

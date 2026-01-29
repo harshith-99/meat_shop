@@ -49,12 +49,20 @@
                         {% endif %}
                     </div>
                     <div class="col-md-6 mb-3">
+                    <label>{{ form.opening_balance.label }}</label>
+                        {{ form.opening_balance }}
+                        {% if form.opening_balance.errors %}
+                            <small class="text-danger">{{ form.opening_balance.errors }}</small>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6 mb-3">
                         <div class="form-check mt-4">
                             {{ form.whole_sale }}
                             <label class="form-check-label">{{ form.whole_sale.label }}</label>
                         </div>
                     </div>
                 </div>
+                
 
                 <button type="submit" class="btn btn-primary">Save Customer</button>
                 <a href="{% url 'customer_list' %}" class="btn btn-secondary">Cancel</a>

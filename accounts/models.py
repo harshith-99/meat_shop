@@ -120,6 +120,7 @@ class Customer(models.Model):
         null=True,
     )
     whole_sale = models.BooleanField(default=False)
+    opening_balance = models.DecimalField(max_digits=10, decimal_places=3,default='0.000')
     delete_status = models.BooleanField(default=False)
     def __str__(self):
         return self.customer_name or self.customer_phone or "Customer"

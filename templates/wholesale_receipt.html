@@ -77,8 +77,9 @@
             <h3>BILL OF SUPPLY - RETAIL</h3>
             <strong>No:</strong> {{ sale.receipt_no }}<br>
             <strong>Date:</strong> {{ sale.sales_date|date:"d/m/Y" }}<br>
-            <strong>GST:</strong> 29AAHCB9792J1ZU<br>
+            <strong>GST:</strong> 29JTSPS9972P1ZP<br>
             <strong>PAN:</strong> AAHCB9792J<br>
+            <strong>FASSAI:</strong> 21225204001111<br>
             <strong>State:</strong> Karnataka<br>
             <strong>State Code:</strong> 29
         </div>
@@ -89,24 +90,24 @@
     <div class="row">
         <div class="col">
             <strong>UNIT DETAILS</strong><br><br>
-            Name: JAAN CHICKEN'S<br>
-            Address: MULLAKADU 4TH MAIL , AKASHBHAVANA  
-            Mangalore, Karnataka, India, 575008<br>
-            Contact #: 7624985943<br>
-            GSTIN: 29AAHCB9792J1ZU<br><br>
+            <b>NAME:</b> JAAN CHICKEN'S WHOLESALE AND RETAIL<br>UNIT OF PALGUNI AGRO MEATS<br>
+            <b>ADDRESS:</b> MULLAKAD 4TH MAIL STONE, AKASHBHAVAN DWARA  
+            KAVOOR ROAD , MANGALORE, Karnataka, India, 575008<br>
+            <b>CONTACT #:</b> 7624985943<br>
+            <b>GSTIN:</b> 29JTSPS9972P1ZP<br><br><br>
 
             <strong>Bank Details:</strong><br>
-            Bank: HDFC Bank Ltd<br>
-            Branch: Hampankatta, Mangalore<br>
-            A/c No: 99958355555555<br>
-            IFSC: HDFC0001571<br>
+            <b>Bank:</b> HDFC Bank Ltd<br>
+            <b>Branch:</b> Hampankatta, Mangalore<br>
+            <b>A/c No:</b> 99958355555555<br>
+            <b>IFSC:</b> HDFC0001571<br>
         </div>
 
         <div class="col">
             <strong>CONSIGNEE DETAILS</strong><br><br>
-            Name: {{ sale.customer.customer_name }}l<br>
-            Address: {{ sale.customer.customer_address }}<br>
-            Contact #: {{ sale.customer.customer_phone }}<br>
+            <b>NAME:</b>  {{ sale.customer.customer_name }}l<br>
+           <b>ADDRESS:</b> {{ sale.customer.customer_address }}<br>
+            <b>CONTACT #:</b> {{ sale.customer.customer_phone }}<br>
         </div>
     </div>
 
