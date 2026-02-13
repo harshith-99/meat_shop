@@ -155,9 +155,10 @@
                         </div>
                         <!-- <small class="text-muted">Max ₹10 without key</small> -->
                     </div>
-                    
+                    <div class="col-md-3">{{ form.pending_balance.label_tag }} {{ form.pending_balance }}</div>
                     <div class="col-md-3">{{ form.payment_mode.label_tag }} {{ form.payment_mode }}</div>
                     <div class="col-md-3" style="display: none;">{{ form.paid_amount.label_tag }} {{ form.paid_amount }}</div>
+                    
                     <div class="col-md-3">{{ form.grand_total.label_tag }} {{ form.grand_total }}</div>
                 </div>
             </div>
@@ -366,33 +367,50 @@ $("#secretKeyModal").on("hidden.bs.modal", function() {
             $("#id_customer_phone").val(c.phone);
             $("#id_customer_address").val(c.address || '');
             $("#id_gstin").val(c.gstin || '');
+
+            $.get('/accounts/api/wholesale-customer-balance/', {
+                customer_id: c.id
+            }, function (data) {
+                $("#id_pending_balance").val(parseFloat(data.balance).toFixed(2));
+            });
+
+    return false;
         }
     });
 
     // Item Name Autocomplete
-    $(document).on("focus", ".item-name", function() {
-        if (!$(this).data("ui-autocomplete")) {
-            $(this).autocomplete({
-                source: function(request, response) {
-                    $.get('/accounts/api/search_items/', {q: request.term}, function(data) {
-                        response(data.map(item => ({
-                            label: item.name + ' (' + item.code + ')',
-                            value: item.name,
-                            item: item
-                        })));
-                    });
-                },
-                select: function(event, ui) {
-                    var item = ui.item.item;
-                    var row = $(this).closest('tr');
-                    row.find('.item-code').val(item.code);
-                    row.find('[name$="price_per_unit"]').val(item.wholesale_price);
-                    row.find('[name$="item"]').val(item.id);
-                    updateTotalsAndFields();
-                }
+    $(document).on("focus", ".item-name", function () {
+    const $input = $(this);
+
+    if ($input.data("autocomplete-initialized")) return;
+
+    $input.data("autocomplete-initialized", true);
+
+    $input.autocomplete({
+        minLength: 1,
+        source: function (request, response) {
+            $.get('/accounts/api/search_items/', { q: request.term }, function (data) {
+                response(data.map(item => ({
+                    label: `${item.name} (${item.code})`,
+                    value: item.name,
+                    item: item
+                })));
             });
+        },
+        select: function (event, ui) {
+            const item = ui.item.item;
+            const row = $input.closest('tr');
+
+            row.find('.item-code').val(item.code);
+            row.find('[name$="price_per_unit"]').val(item.price);
+            row.find('[name$="item"]').val(item.id);
+
+            updateTotalsAndFields();
+            return false;
         }
     });
+});
+
 
     // Item Code Lookup
     $(document).on("change", ".item-code", function() {
@@ -431,6 +449,13 @@ $("#secretKeyModal").on("hidden.bs.modal", function() {
             }
             if ($(this).attr("type") !== "hidden") $(this).val("");
             if ($(this).is("select")) $(this).prop("selectedIndex", 0);
+        });
+
+         newRow.find(".item-name").each(function () {
+        $(this)
+            .removeAttr("id")
+            .removeData("ui-autocomplete")
+            .removeData("autocomplete-initialized");
         });
 
         table.append(newRow);

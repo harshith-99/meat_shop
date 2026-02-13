@@ -33,8 +33,8 @@ class Supplier(models.Model):
     company_name = models.CharField(max_length=150)
     address = models.TextField()
     phone_no = models.CharField(max_length=15)
-    email = models.EmailField(unique=True)
-    gstin = models.CharField(max_length=20, unique=True)
+    email = models.EmailField(blank=True, null=True)
+    gstin = models.CharField(blank=True, null=True)
 
     def __str__(self):
         return f"{self.supplier_name} - {self.company_name}"
@@ -160,10 +160,14 @@ class RetailSales(models.Model):
     delete_status = models.BooleanField(default=False)
     payment_mode = models.CharField(
         max_length=20,
-        choices=(('cash', 'Cash'), ('upi', 'UPI'),('cheque', 'Cheque'),('online', 'Online'), ('pending', 'Pending')),
+        choices=(('cash', 'Cash'), ('upi', 'UPI'),('card', 'Card'),('multiple', 'Multiple'),('pending', 'Pending')),
         default='cash'
     )
     take_amay_employee = models.ForeignKey(Employe, on_delete=models.PROTECT, null=True, blank=True)
+    pending_amount = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, default=0)
+    total_cash = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, default=0)
+    total_upi = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, default=0)
+    total_card = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, default=0)
 
 class RetailSalesDetails(models.Model):
     sales = models.ForeignKey(RetailSales,on_delete=models.CASCADE, related_name='details')
@@ -195,6 +199,7 @@ class WholesaleSales(models.Model):
         default='credit'
     )
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    pending_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     # def clean(self):
     #     if self.paid_amount > self.grand_total:

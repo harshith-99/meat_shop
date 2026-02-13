@@ -84,13 +84,22 @@
                             <td class="text-end text-danger fw-bold">₹{{ s.grand_total|floatformat:2|intcomma }}</td>
                             <td>
                                 <button type="button" class="btn btn-success btn-sm" 
-                                        onclick="openPayModal('{{ s.pk }}', '{{ s.receipt_no }}', '{{ s.customer.customer_name|default:'Walk-in' }}', '{{ s.grand_total|floatformat:2|intcomma }}')">
+                                        onclick="openPayModal('{{ s.pk }}', '{{ s.receipt_no }}', '{{ s.customer.customer_name|default:'Walk-in' }}', '{{ s.grand_total }}')">
                                     Pay Now
                                 </button>
                                 <!-- <a href="{% url 'retail_receipt' s.pk %}?duplicate=1" target="_blank" class="btn btn-info btn-sm">Print</a> -->
                             </td>
                         </tr>
                         {% endfor %}
+                        <tr class="table-secondary fw-bold">
+                            <td colspan="4" class="text-end">TOTAL</td>
+
+                            <td class="text-end">
+                                ₹{{ credit_total_grand|floatformat:2|intcomma }}
+                            </td>
+                            <td></td>
+                        </tr>
+
                     </tbody>
                 </table>
             </div>
@@ -110,6 +119,10 @@
                             <th>Branch</th>
                             <th>Customer</th>
                             <th>Mode</th>
+                            <th>Cash</th>
+                            <th>Upi</th>
+                            <th>Card</th>
+                            <th>Pending</th>
                             <th>Sub Total</th>
                             <th>Discount</th>
                             <th>Grand Total</th>
@@ -130,14 +143,19 @@
                                 <span class="badge 
                                     {% if s.payment_mode == 'cash' %}bg-success
                                     {% elif s.payment_mode == 'upi' %}bg-primary
-                                    {% elif s.payment_mode == 'online' %}bg-info
+                                    {% elif s.payment_mode == 'card' %}bg-info
+                                    {% elif s.payment_mode == 'multiple' %}bg-info
                                     {% elif s.payment_mode == 'pending' %}bg-danger
                                     {% else %}bg-secondary{% endif %}">
                                     {{ s.get_payment_mode_display }}
                                 </span>
                             </td>
+                            <td class="text-end">₹{{ s.total_cash|floatformat:2|intcomma }}</td>
+                            <td class="text-end">₹{{ s.total_upi|floatformat:2|intcomma }}</td>
+                            <td class="text-end">₹{{ s.total_card|floatformat:2|intcomma }}</td>
+                            <td class="text-end">₹{{ s.pending_amount|floatformat:2|intcomma }}</td>
                             <td class="text-end">₹{{ s.total|floatformat:2|intcomma }}</td>
-                            <td class="text-end">₹{{ s.discount|floatformat:2|intcomma }}</td>
+                            <td class="text-end">₹{{ s.discount|default:0|floatformat:2|intcomma }}</td>
                             <td class="text-end">₹{{ s.grand_total|floatformat:2|intcomma }}</td>
                             {% if is_admin_like %}
                                 <td>{{ s.added_by.get_full_name|default:s.added_by.username }}</td>
@@ -153,19 +171,57 @@
                                 {% endif %}
                             </td>
                         </tr>
+
                         {% empty %}
+
                         <tr>
                             <td colspan="{% if is_admin_like %}8{% else %}6{% endif %}" class="text-center">
                                 No sales found
                             </td>
                         </tr>
                         {% endfor %}
+                        <tr class="table-secondary fw-bold">
+                            <td colspan="5" class="text-end">TOTAL</td>
+
+                            <td class="text-end">
+                                ₹{{ total_cash|floatformat:2|intcomma }}
+                            </td>
+
+                             <td class="text-end">
+                                ₹{{ total_upi|floatformat:2|intcomma }}
+                            </td>
+
+                            <td class="text-end">
+                                ₹{{ total_card|floatformat:2|intcomma }}
+                            </td>
+
+                            <td class="text-end">
+                                ₹{{ total_pending|floatformat:2|intcomma }}
+                            </td>
+
+                            <td class="text-end">
+                                ₹{{ total_subtotal|floatformat:2|intcomma }}
+                            </td>
+
+                            <td class="text-end">
+                                ₹{{ total_discount|floatformat:2|intcomma }}
+                            </td>
+
+                            <td class="text-end">
+                                ₹{{ total_grand|floatformat:2|intcomma }}
+                            </td>
+
+                            {% if is_admin_like %}
+                                <td></td>
+                            {% endif %}
+                            <td></td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
 
             <!-- PAYMENT MODE SUMMARY (inside same card) -->
-            <div class="mt-4">
+            <!-- <div class="mt-4">
                 <h5 class="text-primary mb-3">Payment Summary ({{ from_date|date:"d-m-Y" }} to {{ to_date|date:"d-m-Y" }})</h5>
                 <table class="table table-bordered table-sm w-auto ms-auto">
                     <tbody>
@@ -181,14 +237,18 @@
                         </tr>
                     </tbody>
                 </table>
-            </div>
+            </div> -->
         </div>
     </div>
 </div>
 
 <!-- ====================== CUSTOM MODAL (Pure JavaScript) ====================== -->
-<div id="customPayModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000;">
-    <div style="background:#fff; max-width:500px; margin:100px auto; border-radius:8px; box-shadow:0 5px 15px rgba(0,0,0,0.5);">
+<div id="customPayModal" 
+     style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; 
+            background:rgba(0,0,0,0.6); z-index:1000; overflow:auto;">
+    <div style="background:#fff; max-width:500px; margin:60px auto; 
+            border-radius:8px; box-shadow:0 5px 15px rgba(0,0,0,0.5); 
+            max-height:90vh; overflow-y:auto;">
         <div style="background:#28a745; color:white; padding:15px; font-size:18px; font-weight:bold;">
             Pay Credit Bill - <span id="modalReceiptNo"></span>
             <button type="button" onclick="closePayModal()" style="float:right; background:none; border:none; color:white; font-size:20px; cursor:pointer;">×</button>
@@ -200,18 +260,53 @@
             <form id="payForm" method="post">
                 {% csrf_token %}
                 <input type="hidden" name="sale_id" id="modalSaleId">
+
+                <input type="hidden" id="modalGrandTotal">
+
                 <div style="margin-bottom:15px;">
-                    <label style="display:block; margin-bottom:5px; font-weight:bold;">Payment Mode</label>
-                    <select name="payment_mode" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;" required>
+                    <label style="font-weight:bold;">Payment Mode</label>
+                    <select id="modalPaymentMode" name="payment_mode"
+                        style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;" required>
                         <option value="cash">Cash</option>
                         <option value="upi">UPI</option>
-                        <option value="online">Online</option>
-                        <option value="cheque">Cheque</option>
+                        <option value="card">Card</option>
+                        <option value="multiple">Multiple</option>
                     </select>
                 </div>
+
+                <div style="margin-bottom:10px;">
+                    <label>Cash</label>
+                    <input type="number" step="0.01" id="modalCash" name="cash"
+                        style="width:100%; padding:6px;">
+                </div>
+
+                <div style="margin-bottom:10px;">
+                    <label>UPI</label>
+                    <input type="number" step="0.01" id="modalUpi" name="upi"
+                        style="width:100%; padding:6px;">
+                </div>
+
+                <div style="margin-bottom:10px;">
+                    <label>Card</label>
+                    <input type="number" step="0.01" id="modalCard" name="card"
+                        style="width:100%; padding:6px;">
+                </div>
+
+                <div style="margin-bottom:15px;">
+                    <label>Pending</label>
+                    <input type="number" step="0.01" id="modalPending" name="pending"
+                        style="width:100%; padding:6px; background:#f1f1f1;" readonly>
+                </div>
+
                 <div style="text-align:right;">
-                    <button type="button" onclick="closePayModal()" style="padding:8px 16px; background:#6c757d; color:white; border:none; border-radius:4px; cursor:pointer; margin-right:10px;">Cancel</button>
-                    <button type="submit" style="padding:8px 16px; background:#28a745; color:white; border:none; border-radius:4px; cursor:pointer;">Mark as Paid</button>
+                    <button type="button" onclick="closePayModal()" 
+                        style="padding:8px 16px; background:#6c757d; color:white; border:none; border-radius:4px;">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                        style="padding:8px 16px; background:#28a745; color:white; border:none; border-radius:4px;">
+                        Mark as Paid
+                    </button>
                 </div>
             </form>
         </div>
@@ -226,7 +321,8 @@ function openPayModal(saleId, receiptNo, customerName, amountDue) {
     document.getElementById('modalCustomerName').textContent = customerName || 'Walk-in';
     document.getElementById('modalAmountDue').textContent = amountDue;
     document.getElementById('payForm').action = "/accounts/sales/retail/pay-credit/" + saleId + "/";
-    document.getElementById('customPayModal').style.display = 'block';
+    initModalPayment(amountDue);
+    document.getElementById("customPayModal").style.display = "block";
 }
 
 // Close modal
@@ -257,6 +353,72 @@ function deleteSale(pk) {
     })
     .catch(() => alert('Network error.'));
 }
+
+function initModalPayment(amountDue) {
+
+    amountDue = parseFloat(amountDue.toString().replace(/,/g, "")) || 0;
+
+    $("#modalGrandTotal").val(amountDue.toFixed(2));
+
+    $("#modalPaymentMode").val("cash");
+
+    applyModalMode("cash");
+}
+
+function applyModalMode(mode) {
+
+    let total = parseFloat($("#modalGrandTotal").val()) || 0;
+
+    // Reset everything
+    $("#modalCash, #modalUpi, #modalCard")
+        .val("0.00")
+        .prop("readonly", true);
+
+    if (mode === "cash") {
+        $("#modalCash").val(total.toFixed(2)).prop("readonly", false);
+    }
+
+    else if (mode === "upi") {
+        $("#modalUpi").val(total.toFixed(2)).prop("readonly", false);
+    }
+
+    else if (mode === "card") {
+        $("#modalCard").val(total.toFixed(2)).prop("readonly", false);
+    }
+
+    else if (mode === "multiple") {
+        $("#modalCash, #modalUpi, #modalCard")
+            .prop("readonly", false);
+    }
+
+    calculateModalPending();
+}
+
+function calculateModalPending() {
+
+    let total = parseFloat($("#modalGrandTotal").val()) || 0;
+    let cash = parseFloat($("#modalCash").val()) || 0;
+    let upi = parseFloat($("#modalUpi").val()) || 0;
+    let card = parseFloat($("#modalCard").val()) || 0;
+
+    let paid = cash + upi + card;
+    let pending = total - paid;
+
+    if (pending < 0) pending = 0;
+
+    $("#modalPending").val(pending.toFixed(2));
+}
+
+// Mode change
+$("#modalPaymentMode").on("change", function() {
+    applyModalMode($(this).val());
+});
+
+// Live calculation
+$("#modalCash, #modalUpi, #modalCard").on("input", function() {
+    calculateModalPending();
+});
+
 </script>
 
 <style>

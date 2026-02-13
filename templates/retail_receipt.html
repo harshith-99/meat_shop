@@ -162,25 +162,15 @@
     </div>
 
     <!-- TOKEN DISPLAY -->
-    <div class="token-container">
-        {% if sale.details.all %}
-            <div class="token-row">
-                {% for detail in sale.details.all %}
-                    {% if detail.token %}
-                    <div>
-                        <div class="token-oval">{{ detail.token }}</div>
-                    </div>
-                    {% endif %}
-                {% endfor %}
-            </div>
-        {% else %}
-            <div class="token-row">
-                <div>
-                    <div class="token-oval">0</div>
-                </div>
-            </div>
+<div class="token-container">
+    <div class="token-row" id="tokenRow"></div>
+
+    {% for detail in sale.details.all %}
+        {% if detail.token %}
+            <span class="token-source" data-tokens="{{ detail.token }}"></span>
         {% endif %}
-    </div>
+    {% endfor %}
+</div>
 
     <!-- BILL INFO -->
     <div class="info">
@@ -239,6 +229,36 @@
     </table>
 
     <div class="footer">Thank You! Visit Again</div>
+    <script>
+(function () {
+    const tokenRow = document.getElementById("tokenRow");
+    const tokenSources = document.querySelectorAll(".token-source");
+
+    let allTokens = [];
+
+    tokenSources.forEach(el => {
+        const raw = el.dataset.tokens;
+        if (!raw) return;
+
+        raw.split(",").forEach(token => {
+            const clean = token.trim();
+            if (clean) allTokens.push(clean);
+        });
+    });
+
+    // Render each token as its own oval
+    allTokens.forEach(token => {
+        const div = document.createElement("div");
+        div.innerHTML = `<div class="token-oval">${token}</div>`;
+        tokenRow.appendChild(div);
+    });
+
+    // Fallback if no tokens
+    if (allTokens.length === 0) {
+        tokenRow.innerHTML = `<div><div class="token-oval">0</div></div>`;
+    }
+})();
+</script>
 
     <script>
         window.print();

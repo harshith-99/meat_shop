@@ -49,6 +49,35 @@ def render_to_pdf(template_src, context):
     return result.getvalue()
 
 @login_required
+def wholesale_customer_balance(request):
+    customer_id = request.GET.get('customer_id')
+
+    if not customer_id:
+        return JsonResponse({'balance': '0.00'})
+
+    try:
+        customer = Customer.objects.get(id = customer_id,delete_status=False)
+    except Customer.DoesNotExist:
+         return JsonResponse({'balance': '0.00'})
+
+    total_sales = WholesaleSales.objects.filter(
+            customer=customer,
+            delete_status=False
+        ).aggregate(total=Sum('grand_total'))['total'] or Decimal('0.00')
+
+    total_paid = WholesalePayment.objects.filter(
+        customer = customer,
+        delete_status = False
+    ).aggregate(paid=Sum('amount'))['paid'] or Decimal('0.00')
+
+    opening_balance = customer.opening_balance or Decimal('0.00')
+
+    balance = opening_balance + total_sales - total_paid
+
+    return JsonResponse({'balance':str(balance)})
+
+
+@login_required
 def toggle_category_stock(request, pk):
     if request.user.role not in ['admin', 'super_admin']:
         messages.error(request, "Permission denied")
@@ -863,17 +892,52 @@ def retail_pay_credit(request, pk):
     sale = get_object_or_404(RetailSales, pk=pk, delete_status=False)
 
     if request.method == "POST":
+
         payment_mode = request.POST.get('payment_mode')
-        if payment_mode and payment_mode != 'pending':
-            sale.payment_mode = payment_mode
-            sale.save()
-            messages.success(request, f"Pending bill {sale.receipt_no} marked as paid via {payment_mode}!")
-        else:
-            messages.error(request, "Please select a valid payment mode.")
+        cash = request.POST.get('cash')
+        upi = request.POST.get('upi')
+        card = request.POST.get('card')
+        pending = request.POST.get('pending')
+
+        try:
+            cash = Decimal(request.POST.get('cash') or 0)
+            upi = Decimal(request.POST.get('upi') or 0)
+            card = Decimal(request.POST.get('card') or 0)
+            pending = Decimal(request.POST.get('pending') or 0)
+        except ValueError:
+            messages.error(request, "Invalid payment values.")
+            return redirect('retail_sales_list')
+
+        paid_total = cash + upi + card
+
+        # 🔥 Important validation
+        if paid_total <= 0:
+            messages.error(request, "Payment amount must be greater than zero.")
+            return redirect('retail_sales_list')
+
+        # Calculate new pending
+        remaining = sale.grand_total - (
+            sale.total_cash + sale.total_upi + sale.total_card
+        )
+
+        # Update sale
+        sale.payment_mode = payment_mode
+        sale.total_cash += cash
+        sale.total_upi += upi
+        sale.total_card += card
+        sale.pending_amount = pending
+
+        sale.save()
+
+        messages.success(
+            request,
+            f"Payment recorded for bill {sale.receipt_no}."
+        )
+
         return redirect('retail_sales_list')
 
-    # If GET (shouldn't happen), redirect
     return redirect('retail_sales_list')
+
 
 @login_required(login_url='login')
 def customer_list(request):
@@ -1879,6 +1943,8 @@ def retail_sales_list(request):
         delete_status=False
     ).select_related('branch', 'customer', 'added_by')
 
+
+
     if not is_admin_like:
         credit_sales = credit_sales.filter(branch=request.user.branch)
     else:
@@ -1914,6 +1980,20 @@ def retail_sales_list(request):
 
     sales = sales.order_by('-sales_date')
 
+    totals = sales.aggregate(
+    total_subtotal = Sum('total'),
+    total_discount = Sum('discount'),
+    total_grand    = Sum('grand_total'),
+    total_cash     = Sum('total_cash'),
+    total_upi      = Sum('total_upi'),
+    total_card     = Sum('total_card'),
+    total_pending     = Sum('pending_amount'),
+   )
+
+    total_credits = credit_sales.aggregate(
+        credit_total_grand    = Sum('grand_total'),
+    )
+
     # === 3. GRAND TOTAL & PAYMENT MODE BREAKDOWN (Only for filtered sales) ===
     total_grand = sales.aggregate(total=Sum('grand_total'))['total'] or Decimal('0.00')
 
@@ -1935,7 +2015,6 @@ def retail_sales_list(request):
         display_name = mode_display.get(mode, mode.title())
         payment_mode_totals_dict[display_name] = item['total'] or Decimal('0.00')
 
-    print(payment_mode_totals_dict)
     
     # === CONTEXT ===
     context = {
@@ -1957,6 +2036,17 @@ def retail_sales_list(request):
         'from_date': from_date,
         'to_date': to_date,
         'today': today.strftime('%Y-%m-%d'),
+
+        'total_subtotal': totals['total_subtotal'] or Decimal('0.00'),
+        'total_discount': totals['total_discount'] or Decimal('0.00'),
+        'total_grand': totals['total_grand'] or Decimal('0.00'),
+
+        'total_cash': totals['total_cash'] or Decimal('0.00'),
+        'total_upi': totals['total_upi'] or Decimal('0.00'),
+        'total_card': totals['total_card'] or Decimal('0.00'),
+        'total_pending': totals['total_pending'] or Decimal('0.00'),
+
+        'credit_total_grand':total_credits['credit_total_grand'] or Decimal('0.00'),
     }
 
     return render(request, 'retail_sales_list.html', context)
@@ -2037,6 +2127,12 @@ def wholesale_sales_list(request):
 
     sales = sales.order_by('-sales_date')
 
+    totals = sales.aggregate(
+    total_subtotal = Sum('total'),
+    total_discount = Sum('discount'),
+    total_grand    = Sum('grand_total'),
+   )
+
     # Context — exactly like retail
     context = {
         'sales': sales,
@@ -2049,6 +2145,10 @@ def wholesale_sales_list(request):
         'to_date': to_date,                           # real date → for |date filter
         'selected_branch_name': selected_branch_name,
         'today': today.strftime('%Y-%m-%d'),
+
+        'total_subtotal': totals['total_subtotal'] or Decimal('0.00'),
+        'total_discount': totals['total_discount'] or Decimal('0.00'),
+        'total_grand': totals['total_grand'] or Decimal('0.00'),
     }
     return render(request, 'wholesale_sales_list.html', context)
 

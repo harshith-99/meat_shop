@@ -78,7 +78,7 @@
             <strong>No:</strong> {{ sale.receipt_no }}<br>
             <strong>Date:</strong> {{ sale.sales_date|date:"d/m/Y" }}<br>
             <strong>GST:</strong> 29JTSPS9972P1ZP<br>
-            <strong>PAN:</strong> AAHCB9792J<br>
+            <strong>PAN:</strong> JTSPS9972P<br>
             <strong>FASSAI:</strong> 21225204001111<br>
             <strong>State:</strong> Karnataka<br>
             <strong>State Code:</strong> 29
@@ -93,14 +93,14 @@
             <b>NAME:</b> JAAN CHICKEN'S WHOLESALE AND RETAIL<br>UNIT OF PALGUNI AGRO MEATS<br>
             <b>ADDRESS:</b> MULLAKAD 4TH MAIL STONE, AKASHBHAVAN DWARA  
             KAVOOR ROAD , MANGALORE, Karnataka, India, 575008<br>
-            <b>CONTACT #:</b> 7624985943<br>
+            <b>CONTACT #:</b> +917259804918| +919900365123<br>
             <b>GSTIN:</b> 29JTSPS9972P1ZP<br><br><br>
 
             <strong>Bank Details:</strong><br>
             <b>Bank:</b> HDFC Bank Ltd<br>
-            <b>Branch:</b> Hampankatta, Mangalore<br>
-            <b>A/c No:</b> 99958355555555<br>
-            <b>IFSC:</b> HDFC0001571<br>
+            <b>Branch:</b> KOTTARA CHOWKI<br>
+            <b>A/c No:</b> 50200076565261<br>
+            <b>IFSC:</b> HDFC0009004<br>
         </div>
 
         <div class="col">
@@ -141,8 +141,10 @@
 
     <table class="totals">
         <tr><td><strong>SUBTOTAL :</strong></td><td>₹{{ sale.total|floatformat:2|intcomma }}</td></tr>
-        <tr><td><strong>ROUND OFF :</strong></td><td>₹{{ sale.discount|floatformat:2|intcomma }}</td></tr>
-        <tr><td><strong>GRAND TOTAL :</strong></td><td><strong>₹{{ sale.grand_total|floatformat:2|intcomma }}</strong></td></tr>
+        <tr><td><strong>ROUND OFF :</strong></td><td>₹{{ sale.discount|default:0|floatformat:2|intcomma }}</td></tr>
+        <tr><td><strong>TOTAL :</strong></td><td><strong>₹{{ sale.grand_total|floatformat:2|intcomma }}</strong></td></tr>
+        <tr><td><strong>BALANCE :</strong></td><td>₹{{ sale.pending_balance|floatformat:2|intcomma }}</td></tr>
+        <tr><td><strong>GRAND TOTAL :</strong></td><td><strong>₹{{ sale.grand_total|add:sale.pending_balance|floatformat:2|intcomma }}</strong></td></tr>
         <tr><td><strong>Total in Words :</strong></td><td><span id="amountInWords">Loading...</span> Only.</td></tr>
     </table>
 
@@ -159,7 +161,7 @@
 
     // Reliable Indian Rupee to Words Converter
 function convertToWords() {
-    const amount = parseFloat("{{ sale.grand_total|floatformat:2 }}") || 0;
+    const amount = parseFloat("{{ sale.grand_total|add:sale.pending_balance|floatformat:2 }}") || 0;
     if (amount === 0) {
         document.getElementById("amountInWords").textContent = "Zero Rupees";
         return;

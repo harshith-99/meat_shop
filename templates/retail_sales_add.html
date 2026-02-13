@@ -194,6 +194,26 @@
                         {{ form.payment_mode }}
                     </div>
                     <div class="col-md-3">
+                        {{ form.total_cash.label_tag }}
+                        <span class="text-danger">{{ form.total_cash.errors|join:", " }}</span>
+                        {{ form.total_cash }}
+                    </div>
+                    <div class="col-md-3">
+                        {{ form.total_upi.label_tag }}
+                        <span class="text-danger">{{ form.total_upi.errors|join:", " }}</span>
+                        {{ form.total_upi }}
+                    </div>
+                    <div class="col-md-3">
+                        {{ form.total_card.label_tag }}
+                        <span class="text-danger">{{ form.total_card.errors|join:", " }}</span>
+                        {{ form.total_card }}
+                    </div>
+                    <div class="col-md-3">
+                        {{ form.pending_amount.label_tag }}
+                        <span class="text-danger">{{ form.pending_amount.errors|join:", " }}</span>
+                        {{ form.pending_amount }}
+                    </div>
+                    <div class="col-md-3">
                         {{ form.grand_total.label_tag }}
                         <span class="text-danger">{{ form.grand_total.errors|join:", " }}</span>
                         {{ form.grand_total }}
@@ -238,7 +258,7 @@
 
 <script>
 SECRET_KEY = "102030";
-MAX_DISCOUNT = 10;
+MAX_DISCOUNT = 500;
 // Auto change payment mode when take-away employee is selected
 $(document).on('change', '#id_take_amay_employee', function() {
     if ($(this).val() && $(this).val() !== '') {
@@ -314,11 +334,116 @@ function updateTotalsAndFields() {
     $("#id_tax_amount").val(totalTax.toFixed(2));
     $("#id_total").val(subtotal.toFixed(2));
 
+
+   // ================= PAYMENT MODE LOGIC =================
+
+    // First calculate grand total
     let discount = parseFloat($("#id_discount").val()) || 0;
     let grandTotal = subtotal - discount;
-
     $("#id_grand_total").val(grandTotal.toFixed(2));
+
+    let paymentMode = $("#id_payment_mode").val();
+    let grandTotalValue = grandTotal;
+
+    // Always readonly pending
+    $("#id_pending_amount").prop("readonly", true);
+
+    // Read current values
+    let cash = parseFloat($("#id_total_cash").val()) || 0;
+    let upi = parseFloat($("#id_total_upi").val()) || 0;
+    let card = parseFloat($("#id_total_card").val()) || 0;
+
+    // Reset readonly
+    $("#id_total_cash, #id_total_upi, #id_total_card").prop("readonly", true);
+
+    // ---------- CASH ----------
+    if (paymentMode === "cash") {
+
+        $("#id_total_cash").prop("readonly", false);
+
+        cash = grandTotalValue;
+        $("#id_total_cash").val(grandTotalValue.toFixed(2));
+
+        $("#id_total_upi").val("0.00");
+        $("#id_total_card").val("0.00");
+
+    }
+
+    // ---------- UPI ----------
+    else if (paymentMode === "upi") {
+
+        $("#id_total_upi").prop("readonly", false);
+
+        upi = grandTotalValue;
+        $("#id_total_upi").val(grandTotalValue.toFixed(2));
+        
+        $("#id_total_cash").val("0.00");
+        $("#id_total_card").val("0.00");
+
+    }
+
+    // ---------- CARD ----------
+    else if (paymentMode === "card") {
+
+        $("#id_total_card").prop("readonly", false);
+
+        card = grandTotalValue;
+        $("#id_total_card").val(grandTotalValue.toFixed(2));
+
+        $("#id_total_cash").val("0.00");
+        $("#id_total_upi").val("0.00");
+    }
+
+    // ---------- MULTIPLE ----------
+    else if (paymentMode === "multiple") {
+
+        $("#id_total_cash, #id_total_upi, #id_total_card").prop("readonly", false);
+
+    }
+
+    // ---------- PENDING ----------
+    else if (paymentMode === "pending") {
+
+        $("#id_total_cash").val("0.00");
+        $("#id_total_upi").val("0.00");
+        $("#id_total_card").val("0.00");
+
+        $("#id_pending_amount").val(grandTotalValue.toFixed(2));
+    }
 }
+
+function calculatePending(grandTotalValue) {
+
+    let cash = parseFloat($("#id_total_cash").val()) || 0;
+    let upi = parseFloat($("#id_total_upi").val()) || 0;
+    let card = parseFloat($("#id_total_card").val()) || 0;
+    let pending = parseFloat($("#id_pending_amount").val()) || 0;
+
+    let paid = cash + upi + card;
+     pending = grandTotalValue - paid;
+
+    if (pending < 0) pending = 0;
+
+    $("#id_pending_amount").val(pending.toFixed(2));
+}
+
+$("#id_payment_mode").change(function() {
+    $("#id_pending_amount").val(0.00);
+    updateTotalsAndFields();
+});
+
+$("#id_total_cash, #id_total_upi, #id_total_card").on("input", function() {
+
+    let grandTotalValue = parseFloat($("#id_grand_total").val()) || 0;
+    calculatePending(grandTotalValue);
+
+});
+
+$("#id_total_cash, #id_total_upi, #id_total_card").on("input", function() {
+    if ($("#id_payment_mode").val() === "multiple") {
+        updateTotalsAndFields();
+    }
+});
 
 // Discount validation with secret key
 let approvedHighDiscount = false;
@@ -392,30 +517,40 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     });
 
-    // Item Search
-    $(document).on("focus", ".item-name", function() {
-        if (!$(this).data("ui-autocomplete")) {
-            $(this).autocomplete({
-                source: function(request, response) {
-                    $.get('/accounts/api/search_items/', {q: request.term}, function(data) {
-                        response(data.map(item => ({
-                            label: `${item.name} (${item.code})`,
-                            value: item.name,
-                            item: item
-                        })));
-                    });
-                },
-                select: function(event, ui) {
-                    const item = ui.item.item;
-                    const row = $(this).closest('tr');
-                    row.find('.item-code').val(item.code);
-                    row.find('[name$="price_per_unit"]').val(item.price);
-                    row.find('[name$="item"]').val(item.id);
-                    updateTotalsAndFields();
-                }
+    // Item Search — STABLE FIX (works after selection & refocus)
+$(document).on("focus", ".item-name", function () {
+    const $input = $(this);
+
+    // ✅ Prevent double initialization
+    if ($input.data("autocomplete-initialized")) return;
+
+    $input.data("autocomplete-initialized", true);
+
+    $input.autocomplete({
+        minLength: 1,
+        source: function (request, response) {
+            $.get('/accounts/api/search_items/', { q: request.term }, function (data) {
+                response(data.map(item => ({
+                    label: `${item.name} (${item.code})`,
+                    value: item.name,
+                    item: item
+                })));
             });
+        },
+        select: function (event, ui) {
+            const item = ui.item.item;
+            const row = $input.closest('tr');
+
+            row.find('.item-code').val(item.code);
+            row.find('[name$="price_per_unit"]').val(item.price);
+            row.find('[name$="item"]').val(item.id);
+
+            updateTotalsAndFields();
+            return false;
         }
     });
+});
+
 
     $(document).on("change", ".item-code", function() {
         const code = $(this).val().trim();
@@ -459,6 +594,13 @@ document.addEventListener("DOMContentLoaded", function() {
             }
             if ($(this).attr("type") !== "hidden") $(this).val("");
             if ($(this).is("select")) $(this).prop("selectedIndex", 0);
+        });
+
+         newRow.find(".item-name").each(function () {
+        $(this)
+            .removeAttr("id")
+            .removeData("ui-autocomplete")
+            .removeData("autocomplete-initialized");
         });
 
         table.append(newRow);

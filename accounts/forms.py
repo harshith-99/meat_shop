@@ -724,7 +724,7 @@ class CustomerDataForm(forms.Form):
 class RetailSalesForm(forms.ModelForm):
     class Meta:
         model = RetailSales
-        fields = ['receipt_no', 'sales_date', 'branch', 'tax_amount','discount','total', 'grand_total', 'payment_mode','take_amay_employee']
+        fields = ['receipt_no', 'sales_date', 'branch', 'tax_amount','discount','total', 'grand_total', 'payment_mode','take_amay_employee','pending_amount','total_cash','total_upi','total_card']
 
     receipt_no = forms.CharField(
         widget=forms.TextInput(attrs={'class': 'form-control', 'readonly': True, 'autocomplete': 'off'})
@@ -754,7 +754,7 @@ class RetailSalesForm(forms.ModelForm):
         required=False
     )
     payment_mode = forms.ChoiceField(
-        choices=(('cash', 'Cash'), ('upi', 'UPI'),('cheque', 'Cheque'),('online', 'Online'), ('pending', 'Pending')),
+        choices=(('cash', 'Cash'), ('upi', 'UPI'),('card', 'Card'),('multiple', 'Multiple'),('pending', 'Pending')),
         widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'})
     )
     take_amay_employee = forms.ModelChoiceField(
@@ -764,7 +764,25 @@ class RetailSalesForm(forms.ModelForm):
         label="Take Away",
         empty_label="Store Customer"
     )
-
+    pending_amount = forms.DecimalField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'readonly': True,'autocomplete': 'off'}),
+        required=False
+    )
+    total_cash = forms.DecimalField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+        label="Total Cash",
+        required=False
+    )
+    total_upi = forms.DecimalField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+        label="Total UPI",
+        required=False
+    )
+    total_card = forms.DecimalField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+        label="Total Card",
+        required=False
+    )
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
@@ -811,8 +829,8 @@ class RetailSalesDetailForm(forms.ModelForm):
     net_weight = forms.DecimalField(
         widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'})
     )
-    token = forms.IntegerField(
-        widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+    token = forms.CharField(
+        widget=forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
         required=False
     )
     total_amount = forms.DecimalField(
@@ -826,7 +844,7 @@ RetailSalesDetailFormSet = modelformset_factory(
 class WholesaleSalesForm(forms.ModelForm):
     class Meta:
         model = WholesaleSales
-        fields = ['receipt_no', 'sales_date', 'branch', 'tax_amount','discount','total', 'grand_total', 'payment_mode', 'paid_amount']
+        fields = ['receipt_no', 'sales_date', 'branch', 'tax_amount','discount','total', 'grand_total', 'payment_mode', 'paid_amount','pending_balance']
 
     receipt_no = forms.CharField(
         widget=forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
@@ -866,6 +884,10 @@ class WholesaleSalesForm(forms.ModelForm):
         decimal_places=2,
         widget=forms.NumberInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
         required=True
+    )
+    pending_balance = forms.DecimalField(
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'readonly': True, 'autocomplete': 'off'}),
+        required=False
     )
 
     def __init__(self, *args, user=None, **kwargs):
