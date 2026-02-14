@@ -38,6 +38,174 @@ logo_path = os.path.join(
     'img',
     'jaan_logo.jpeg'
 )
+def customer_ledger(request):
+
+    user = request.user
+    customer_id = request.GET.get('customer_id')
+    is_admin_like = user.role in ['super_admin', 'admin']
+
+    branch_id = request.GET.get('branch')
+
+    from_date_str = request.GET.get('from_date')
+    to_date_str = request.GET.get('to_date')
+    today = date.today()
+
+    try:
+        from_date = datetime.strptime(from_date_str, '%Y-%m-%d').date() if from_date_str else today
+    except:
+        from_date = today
+
+    try:
+        to_date = datetime.strptime(to_date_str, '%Y-%m-%d').date() if to_date_str else today
+    except:
+        to_date = today
+
+    ledger_rows = []
+    running_balance = Decimal('0.00')
+    selected_customer = None
+
+    # ✅ GET CUSTOMER FIRST
+    if customer_id:
+        selected_customer = Customer.objects.filter(
+            id=customer_id,
+            whole_sale=True,
+            delete_status=False
+        ).first()
+
+    if selected_customer:
+
+        # Filters
+        sales_filter = {
+            'customer': selected_customer,
+            'delete_status': False
+        }
+
+        payment_filter = {
+            'customer': selected_customer,
+            'delete_status': False
+        }
+
+        # Branch filtering
+        if is_admin_like:
+            if branch_id:
+                sales_filter['branch_id'] = branch_id
+                payment_filter['branch_id'] = branch_id
+        else:
+            sales_filter['branch'] = user.branch
+            payment_filter['branch'] = user.branch
+
+        # ---------------------------
+        # 1️⃣ Opening Balance
+        # ---------------------------
+
+        previous_sales = WholesaleSales.objects.filter(
+            **sales_filter,
+            sales_date__lt=from_date
+        ).aggregate(total=Sum('grand_total'))['total'] or Decimal('0.00')
+
+        previous_payments = WholesalePayment.objects.filter(
+            **payment_filter,
+            payment_date__lt=from_date
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+        opening_balance = (
+            selected_customer.opening_balance
+            + previous_sales
+            - previous_payments
+        )
+
+        running_balance = opening_balance
+
+        ledger_rows.append({
+            'date': from_date,
+            'type': '',
+            'particular': 'Opening Balance',
+            'receipt_no': '',
+            'debit': opening_balance if opening_balance > 0 else '',
+            'credit': abs(opening_balance) if opening_balance < 0 else '',
+            'balance': opening_balance
+        })
+
+        # ---------------------------
+        # 2️⃣ Transactions
+        # ---------------------------
+
+        sales = WholesaleSales.objects.filter(
+            **sales_filter,
+            sales_date__gte=from_date,
+            sales_date__lte=to_date
+        )
+
+        payments = WholesalePayment.objects.filter(
+            **payment_filter,
+            payment_date__gte=from_date,
+            payment_date__lte=to_date
+        )
+
+        transactions = []
+
+        for s in sales:
+            transactions.append({
+                'date': s.sales_date,
+                'type': 'To',
+                'particular': 'Sales',
+                'receipt_no': s.receipt_no,
+                'debit': s.grand_total,
+                'credit': Decimal('0.00')
+            })
+
+        for p in payments:
+            transactions.append({
+                'date': p.payment_date,
+                'type': 'By',
+                'particular': p.get_payment_mode_display(),
+                'receipt_no': p.receipt_no,
+                'debit': Decimal('0.00'),
+                'credit': p.amount
+            })
+
+        transactions = sorted(transactions, key=lambda x: x['date'])
+
+        # ---------------------------
+        # 3️⃣ Running Balance
+        # ---------------------------
+
+        for txn in transactions:
+            running_balance += txn['debit']
+            running_balance -= txn['credit']
+
+            ledger_rows.append({
+                **txn,
+                'balance': running_balance
+            })
+
+    total_debit = Decimal('0.00')
+    total_credit = Decimal('0.00')
+
+    for row in ledger_rows:
+        if isinstance(row.get('debit'), Decimal):
+            total_debit += row['debit']
+        if isinstance(row.get('credit'), Decimal):
+            total_credit += row['credit']
+
+    closing_balance = running_balance
+
+    context = {
+        'ledger_rows': ledger_rows,
+        'customers': Customer.objects.filter(whole_sale=True, delete_status=False),
+        'branches': Branch.objects.all() if is_admin_like else [],
+        'selected_customer': selected_customer,
+        'is_admin_like': is_admin_like,
+        'from_date': from_date,
+        'to_date': to_date,
+        'total_debit': total_debit,
+        'total_credit': total_credit,
+        'closing_balance': closing_balance,
+    }
+
+    return render(request, 'customer_ledger.html', context)
+
+
 
 def render_to_pdf(template_src, context):
     html = render_to_string(template_src, context)

@@ -1,0 +1,169 @@
+{% load static %}
+{% load humanize %}
+{% include "sidebar/sidebar.html" %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <h1 class="h3 mb-4 text-gray-800">Wholesale Customer Ledger</h1>
+
+    <!-- FILTER CARD -->
+    <div class="card shadow mb-4">
+        <div class="card-header bg-primary text-white">
+            <h6 class="m-0 font-weight-bold">Filter Ledger</h6>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3">
+
+                <div class="col-md-3">
+                    <label class="form-label">Customer</label>
+                    <select name="customer_id" class="form-control" required>
+                        <option value="">-- Select Wholesale Customer --</option>
+                        {% for c in customers %}
+                        <option value="{{ c.id }}"
+                            {% if selected_customer and selected_customer.id == c.id %}
+                                selected
+                            {% endif %}>
+                            {{ c.customer_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                {% if is_admin_like %}
+                <div class="col-md-3">
+                    <label class="form-label">Branch</label>
+                    <select name="branch" class="form-control">
+                        <option value="">-- All Branches --</option>
+                        {% for branch in branches %}
+                        <option value="{{ branch.branch_id }}">
+                            {{ branch.branch_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+
+                <div class="col-md-2">
+                    <label class="form-label">From Date</label>
+                    <input type="date" name="from_date" class="form-control"
+                           value="{{ from_date }}">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">To Date</label>
+                    <input type="date" name="to_date" class="form-control"
+                           value="{{ to_date }}">
+                </div>
+
+                <div class="col-md-2 align-self-end">
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-search"></i> View Ledger
+                    </button>
+                    <a href="{% url 'customer_ledger' %}" class="btn btn-secondary">
+                        Clear
+                    </a>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+
+    {% if ledger_rows %}
+
+    <!-- LEDGER TABLE -->
+    <div class="card shadow">
+        <div class="card-header bg-dark text-white">
+            <h6 class="m-0 font-weight-bold">
+                Ledger of {{ selected_customer.customer_name }}
+            </h6>
+        </div>
+
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm">
+                    <thead class="table-dark text-center">
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Particular</th>
+                            <th>Receipt No</th>
+                            <th>Debit (₹)</th>
+                            <th>Credit (₹)</th>
+                            <th>Balance (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+                    {% for row in ledger_rows %}
+
+                        {% if forloop.first %}
+                        <!-- Opening Balance Row -->
+                        <tr class="table-warning fw-bold">
+                            <td></td>
+                            <td></td>
+                            <td>Opening Balance</td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td class="text-end">
+                                ₹{{ row.balance|floatformat:2|intcomma }}
+                            </td>
+                        </tr>
+                        {% else %}
+
+                        <tr>
+                            <td>{{ row.date|date:"d/m/Y" }}</td>
+                            <td class="text-center">{{ row.type }}</td>
+                            <td>{{ row.particular }}</td>
+                            <td>{{ row.receipt_no }}</td>
+
+                            <td class="text-end text-danger">
+                                {% if row.debit %}
+                                    ₹{{ row.debit|floatformat:2|intcomma }}
+                                {% endif %}
+                            </td>
+
+                            <td class="text-end text-success">
+                                {% if row.credit %}
+                                    ₹{{ row.credit|floatformat:2|intcomma }}
+                                {% endif %}
+                            </td>
+
+                            <td class="text-end fw-bold">
+                                ₹{{ row.balance|floatformat:2|intcomma }}
+                            </td>
+                        </tr>
+
+                        {% endif %}
+
+                    {% endfor %}
+
+                    <!-- TOTAL ROW -->
+                    <tr class="table-dark text-white fw-bold">
+                        <td colspan="4" class="text-end">TOTAL</td>
+
+                        <td class="text-end">
+                            ₹{{ total_debit|floatformat:2|intcomma }}
+                        </td>
+
+                        <td class="text-end">
+                            ₹{{ total_credit|floatformat:2|intcomma }}
+                        </td>
+
+                        <td class="text-end">
+                            ₹{{ closing_balance|floatformat:2|intcomma }}
+                        </td>
+                    </tr>
+
+                </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {% endif %}
+
+</div>
+{% endblock %}

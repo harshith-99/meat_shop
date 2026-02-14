@@ -108,6 +108,7 @@ urlpatterns = [
     path('wholesale-item-report/', views.wholesale_item_report, name='wholesale_item_report'),
     path('wholesale-payments/', views.wholesale_payment_list, name='wholesale_payment_list'),
     path('daily-stock/report/', views.daily_stock_report, name='daily_stock_report'),
+    path('reports/wholesale-customer-ledger/', views.customer_ledger, name='customer_ledger'),
 
     path('wholesale-payment/add/', views.wholesale_payment_add, name='wholesale_payment_add'),
     
