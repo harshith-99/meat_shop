@@ -684,11 +684,37 @@ def wholesale_payment_add(request):
                 payment.branch = request.user.branch
             payment.save()
             messages.success(request, f"Payment of ₹{payment.amount} recorded for {payment.customer}!")
-            return redirect('wholesale_payment_list')
+            return redirect('wholesale_payment_receipt', pk=payment.pk)
     else:
         form = WholesalePaymentForm(user=request.user)
 
     return render(request, "wholesale_payment_add.html", {"form": form})
+
+@login_required
+def wholesale_payment_receipt(request, pk):
+    payment = get_object_or_404(WholesalePayment, pk=pk)
+
+    return render(request, "wholesale_payment_receipt.html", {
+        "payment": payment
+    })
+
+from django.http import JsonResponse
+
+@login_required(login_url='login')
+def wholesale_payment_delete(request, pk):
+    payment = get_object_or_404(WholesalePayment,pk=pk,delete_status=False)
+
+    if request.method == "POST":
+        payment.delete_status = True
+        payment.save()
+
+        return JsonResponse({"success": True})
+
+    return JsonResponse({
+        "success": False,
+        "error": "Invalid request"
+    })
+
 
 @login_required
 def wholesale_payment_list(request):
@@ -1523,6 +1549,7 @@ def purchase_list(request):
     branch_id = request.GET.get('branch')
     from_date_str = request.GET.get('from_date')
     to_date_str = request.GET.get('to_date')
+    supplier_id = request.GET.get('supplier')
 
     # Default: today
     today = date.today()
@@ -1547,6 +1574,8 @@ def purchase_list(request):
     except ValueError:
         to_date_obj = today
         to_date = today.strftime('%Y-%m-%d')
+    
+    selected_supplier = None
 
     # Base queryset
     purchases = Purchase.objects.filter(
@@ -1568,6 +1597,10 @@ def purchase_list(request):
             selected_branch = request.user.branch
         else:
             purchases = purchases.none()
+
+    if supplier_id and supplier_id.isdigit():
+        purchases = purchases.filter(supplier_id=supplier_id)
+        selected_supplier = Supplier.objects.filter(supplier_id=supplier_id).first()
 
     # Order by latest first
     purchases = purchases.order_by('-purchase_date', '-created_date')
@@ -1592,6 +1625,8 @@ def purchase_list(request):
         'from_date': from_date or today.strftime('%Y-%m-%d'),
         'to_date': to_date or today.strftime('%Y-%m-%d'),
         'today': today.strftime('%Y-%m-%d'),
+        'suppliers': Supplier.objects.all(),
+        'selected_supplier': selected_supplier,
     }
     return render(request, 'purchase_list.html', context)
 

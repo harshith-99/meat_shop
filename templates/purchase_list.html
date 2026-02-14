@@ -31,7 +31,7 @@
                     <select name="branch" class="form-control">
                         <option value="">-- All Branches --</option>
                         {% for branch in branches %}
-                        <option value="{{ branch.branch_id }}" {% if selected_branch.branch_id == branch.branch_id %}selected{% endif %}>
+                        <option value="{{ branch.branch_id }}" {% if .branch_id == branch.branch_id %}selected{% endif %}>
                             {{ branch.branch_name }} ({{ branch.alias }})
                         </option>
                         {% endfor %}
@@ -46,6 +46,22 @@
                 </div>
                 {% endif %}
                 {% endif %}
+
+                <div class="col-md-3">
+                    <label class="form-label">Supplier</label>
+                    <select name="supplier" class="form-control">
+                        <option value="">-- All Supplier --</option>
+                        {% for supplier in suppliers %}
+                        <option value="{{ supplier.supplier_id }}"  
+
+                        {% if selected_supplier and selected_supplier.supplier_id == supplier.supplier_id %}
+                            selected
+                        {% endif %}>
+                        {{ supplier.supplier_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
 
                 <div class="col-md-3 align-self-end">
                     <button type="submit" class="btn btn-primary">

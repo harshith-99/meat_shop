@@ -1,0 +1,183 @@
+{% load static %}
+{% load humanize %}
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Wholesale Payment Receipt</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        font-size: 14px;
+    }
+    .container {
+        width: 800px;
+        margin: auto;
+        border: 1px solid #aaa;
+        padding: 20px;
+    }
+    h3 {
+        text-align: center;
+        margin-bottom: 5px;
+    }
+    .row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 15px;
+    }
+    .col {
+        width: 48%;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+    table th, table td {
+        border: 1px solid #444;
+        padding: 8px;
+        text-align: center;
+    }
+    .signature {
+        margin-top: 40px;
+        text-align: right;
+        font-weight: bold;
+    }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+    <div class="row">
+        <div>
+            <img style="height:100px;" src="{% static 'img/jaan_logo.jpeg' %}">
+        </div>
+        <div style="text-align:right;">
+            <h3>WHOLESALE PAYMENT RECEIPT</h3>
+            <strong>Receipt No:</strong> {{ payment.receipt_no }}<br>
+            <strong>Date:</strong> {{ payment.payment_date|date:"d/m/Y" }}<br>
+            <strong>Time:</strong> {{ payment.created_date|time:"h:i A" }}<br>
+        </div>
+    </div>
+
+    <hr>
+
+    <div class="row">
+        <div class="col">
+            <strong>UNIT DETAILS</strong><br><br>
+            JAAN CHICKEN'S WHOLESALE & RETAIL<br>
+            {{ payment.branch.branch_name }}<br>
+            {{ payment.branch.branch_address_full }}<br>
+            Contact: {{ payment.branch.phone }}
+        </div>
+
+        <div class="col">
+            <strong>CUSTOMER DETAILS</strong><br><br>
+            Name: {{ payment.customer.customer_name }}<br>
+            Phone: {{ payment.customer.customer_phone }}<br>
+            Address: {{ payment.customer.customer_address }}
+        </div>
+    </div>
+
+    <table>
+        <tr>
+            <th>Payment Mode</th>
+            <th>Amount Paid</th>
+            <th>Description</th>
+        </tr>
+        <tr>
+            <td>{{ payment.get_payment_mode_display }}</td>
+            <td>₹{{ payment.amount|floatformat:2|intcomma }}</td>
+            <td>{{ payment.description|default:"—" }}</td>
+        </tr>
+    </table>
+
+    <br>
+
+    <table>
+        <tr>
+            <td><strong>Amount Received:</strong></td>
+            <td><strong>₹{{ payment.amount|floatformat:2|intcomma }}</strong></td>
+        </tr>
+        <tr>
+            <td><strong>Amount in Words:</strong></td>
+            <td><span id="amountInWords">Loading...</span> Only</td>
+        </tr>
+    </table>
+
+    <div class="signature">
+        Authorized Signature<br><br>
+        ______________________
+    </div>
+
+</div>
+
+<script>
+// Convert amount to words (Indian format)
+function convertToWords() {
+    const amount = parseFloat("{{ payment.amount|floatformat:2 }}") || 0;
+
+    if (amount === 0) {
+        document.getElementById("amountInWords").innerText = "Zero Rupees";
+        return;
+    }
+
+    const ones = ["", "One ", "Two ", "Three ", "Four ", "Five ", "Six ", "Seven ", "Eight ", "Nine ", "Ten ",
+                "Eleven ", "Twelve ", "Thirteen ", "Fourteen ", "Fifteen ", "Sixteen ",
+                "Seventeen ", "Eighteen ", "Nineteen "];
+
+    const tens = ["", "", "Twenty ", "Thirty ", "Forty ", "Fifty ",
+                "Sixty ", "Seventy ", "Eighty ", "Ninety "];
+
+    function convertLessThanThousand(num) {
+        let str = "";
+        if (num >= 100) {
+            str += ones[Math.floor(num / 100)] + "Hundred ";
+            num %= 100;
+        }
+        if (num >= 20) {
+            str += tens[Math.floor(num / 10)];
+            num %= 10;
+        }
+        if (num > 0) {
+            str += ones[num];
+        }
+        return str.trim();
+    }
+
+    let rupees = Math.floor(amount);
+    let paise = Math.round((amount - rupees) * 100);
+
+    let result = "";
+
+    let lakhs = Math.floor(rupees / 100000);
+    rupees %= 100000;
+    if (lakhs > 0) result += convertLessThanThousand(lakhs) + "Lakh ";
+
+    let thousands = Math.floor(rupees / 1000);
+    rupees %= 1000;
+    if (thousands > 0) result += convertLessThanThousand(thousands) + "Thousand ";
+
+    if (rupees > 0) result += convertLessThanThousand(rupees);
+
+    result += " Rupees";
+
+    if (paise > 0) {
+        result += " and " + convertLessThanThousand(paise) + " Paise";
+    }
+
+    document.getElementById("amountInWords").innerText = result;
+}
+
+convertToWords();
+
+window.print();
+setTimeout(function(){
+    window.location = "{% url 'wholesale_payment_list' %}";
+}, 1500);
+</script>
+
+</body>
+</html>

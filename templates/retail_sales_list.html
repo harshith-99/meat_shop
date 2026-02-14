@@ -66,6 +66,7 @@
                 <table class="table table-sm table-bordered table-striped">
                     <thead class="table-danger">
                         <tr>
+                             <th>SI No</th>
                             <th>Receipt</th>
                             <th>Date</th>
                             <th>Customer</th>
@@ -77,14 +78,19 @@
                     <tbody>
                         {% for s in credit_sales %}
                         <tr>
+                            <td>{{ forloop.counter }}</td>
                             <td>{{ s.receipt_no }}</td>
-                            <td>{{ s.sales_date|date:"d/m/Y" }}</td>
+                            <td>{{ s.sales_date|date:"d/m/Y" }}
+                                <small class="text-muted">
+                                        {{ s.created_date|date:"h:i A" }}
+                                    </small>
+                            </td>
                             <td>{{ s.customer.customer_name|default:"Walk-in" }}</td>
                              <td>{{ s.take_amay_employee.name|default:"Walk-in" }}</td>
                             <td class="text-end text-danger fw-bold">₹{{ s.grand_total|floatformat:2|intcomma }}</td>
                             <td>
                                 <button type="button" class="btn btn-success btn-sm" 
-                                        onclick="openPayModal('{{ s.pk }}', '{{ s.receipt_no }}', '{{ s.customer.customer_name|default:'Walk-in' }}', '{{ s.grand_total }}')">
+                                        onclick="openPayModal('{{ s.pk }}', '{{ s.receipt_no }}', '{{ s.customer.customer_name }}', '{{ s.grand_total }}')">
                                     Pay Now
                                 </button>
                                 <!-- <a href="{% url 'retail_receipt' s.pk %}?duplicate=1" target="_blank" class="btn btn-info btn-sm">Print</a> -->
@@ -92,7 +98,7 @@
                         </tr>
                         {% endfor %}
                         <tr class="table-secondary fw-bold">
-                            <td colspan="4" class="text-end">TOTAL</td>
+                            <td colspan="5" class="text-end">TOTAL</td>
 
                             <td class="text-end">
                                 ₹{{ credit_total_grand|floatformat:2|intcomma }}
@@ -114,6 +120,7 @@
                 <table class="table table-sm table-bordered">
                     <thead class="table-dark">
                         <tr>
+                            <th>SI No</th>
                             <th>Receipt</th>
                             <th>Date</th>
                             <th>Branch</th>
@@ -129,14 +136,20 @@
                             {% if is_admin_like %}
                             <th>Created By</th>
                             {% endif %}
+                            <th>Take Away</th>
                             <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for s in sales %}
                         <tr {% if s.payment_mode == 'pending' %}class="table-warning"{% endif %}>
+                            <td>{{ forloop.counter }}</td>
                             <td>{{ s.receipt_no }}</td>
-                            <td>{{ s.sales_date|date:"d/m/Y" }}</td>
+                            <td>{{ s.sales_date|date:"d/m/Y" }}
+                                    <small class="text-muted">
+                                        {{ s.created_date|date:"h:i A" }}
+                                    </small>
+                            </td>
                             <td>{{ s.branch.branch_name }}</td>
                             <td>{{ s.customer.customer_name|default:"Walk-in" }}</td>
                             <td>
@@ -160,10 +173,27 @@
                             {% if is_admin_like %}
                                 <td>{{ s.added_by.get_full_name|default:s.added_by.username }}</td>
                             {% endif %}
+                            <td class="text-end">
+                                {% if s.take_amay_employee %}
+                                    {{ s.take_amay_employee.Employe.name }}
+                                {% else %}
+                                    Store Customer
+                                {% endif %}
+                            </td>
+
                             <td>
                                 <a href="{% url 'retail_receipt' s.pk %}?duplicate=1" target="_blank" class="btn btn-info btn-sm">
                                     Print
                                 </a>
+                                    {% if s.pending_amount > 0 %}
+                                        <button type="button" class="btn btn-success btn-sm"
+                                            onclick="openPayModal('{{ s.pk }}', 
+                                                                '{{ s.receipt_no }}', 
+                                                                '{{ s.customer.customer_name }}', 
+                                                                '{{ s.pending_amount }}')">
+                                            Complete Payment
+                                        </button>
+                                    {% endif %}
                                 {% if is_admin_like %}
                                     <button type="button" onclick="deleteSale('{{ s.pk }}')" class="btn btn-danger btn-sm">
                                         Delete
@@ -181,7 +211,7 @@
                         </tr>
                         {% endfor %}
                         <tr class="table-secondary fw-bold">
-                            <td colspan="5" class="text-end">TOTAL</td>
+                            <td colspan="6" class="text-end">TOTAL</td>
 
                             <td class="text-end">
                                 ₹{{ total_cash|floatformat:2|intcomma }}

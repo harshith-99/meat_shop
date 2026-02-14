@@ -299,10 +299,16 @@ class BranchForm(forms.ModelForm):
     branch_address = forms.CharField(
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Branch Address', 'required': 'true', 'autocomplete': 'off'})
     )
+    branch_address_full = forms.CharField(
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Branch Address', 'required': 'true', 'autocomplete': 'off'})
+    )
+    phone = forms.CharField(
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'phone', 'required': 'true', 'autocomplete': 'off'})
+    )
 
     class Meta:
         model = Branch
-        fields = ['branch_name','alias','branch_address']
+        fields = ['branch_name','alias','branch_address','branch_address_full','phone']
 
 class ItemCategoryForm(forms.ModelForm):
     category_name = forms.CharField(
@@ -526,7 +532,7 @@ class PurchaseDetailForm(forms.ModelForm):
                   'qty', 'no_of_boxes','gross_weight', 'empty_weight', 'net_weight', 'total_amount']
 
     purchase_type = forms.ChoiceField(
-        choices=[('retail', 'Retail'), ('wholesale', 'Wholesale')],
+        choices=[('retail', 'Retail')],
         widget=forms.Select(attrs={'class': 'form-control', 'style': 'width: 85px;', 'required': 'true', 'autocomplete': 'off'}),
         initial='retail'
     )
@@ -1056,6 +1062,10 @@ class AttendanceInlineForm(forms.ModelForm):
         return status
     
 class WholesalePaymentForm(forms.ModelForm):
+    receipt_no = forms.CharField(
+        widget=forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+        required=True
+    )
     customer = forms.ModelChoiceField(
         queryset=Customer.objects.filter(whole_sale=True, delete_status=False),
         widget=forms.Select(attrs={'class': 'form-control', 'autocomplete': 'off'}),
@@ -1092,7 +1102,7 @@ class WholesalePaymentForm(forms.ModelForm):
 
     class Meta:
         model = WholesalePayment
-        fields = ['customer', 'payment_date', 'amount', 'payment_mode', 'description', 'branch']
+        fields = ['receipt_no','customer', 'payment_date', 'amount', 'payment_mode', 'description', 'branch']
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)

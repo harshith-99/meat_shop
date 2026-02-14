@@ -9,7 +9,8 @@ class Branch(models.Model):
     branch_name = models.CharField(max_length=100)
     alias  = models.CharField(max_length=10)
     branch_address = models.TextField()
-
+    branch_address_full = models.TextField(null=True, blank=True)
+    phone = models.CharField(max_length=100, null=True, blank=True)
     def __str__(self):
         return self.branch_name
 
@@ -250,6 +251,7 @@ class Attendance(models.Model):
         return f"{self.employee.name} – {self.get_status_display()} ({self.date})"
 
 class WholesalePayment(models.Model):
+    receipt_no = models.CharField(max_length=20,default=0)
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, limit_choices_to={'whole_sale': True})
     payment_date = models.DateField()
     created_date = models.DateTimeField(auto_now_add=True)

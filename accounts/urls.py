@@ -61,6 +61,8 @@ urlpatterns = [
     path('sales/wholesale/delete/<int:pk>/', views.wholesale_sales_delete, name='wholesale_sales_delete'),
     path('api/check_receipt/', views.check_receipt, name='check_receipt'),
     path('api/wholesale-customer-balance/', views.wholesale_customer_balance, name='wholesale_customer_balance'),
+    path('wholesale/payment/receipt/<int:pk>/', views.wholesale_payment_receipt, name='wholesale_payment_receipt'),
+    path('wholesale/payment/delete/<int:pk>/',views.wholesale_payment_delete,name='wholesale_payment_delete'),
 
 
     # Employe URLs

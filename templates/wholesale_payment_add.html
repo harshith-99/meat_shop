@@ -21,6 +21,10 @@
                 {% csrf_token %}
                 <div class="row">
                     <div class="col-md-6 mb-3">
+                        {{ form.receipt_no.label_tag }}
+                        {{ form.receipt_no }}
+                    </div>
+                    <div class="col-md-6 mb-3">
                         {{ form.customer.label_tag }}
                         {{ form.customer }}
                     </div>
