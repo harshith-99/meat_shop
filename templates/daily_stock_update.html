@@ -1,166 +1,214 @@
 {% load static %}
 {% include "sidebar/sidebar.html" %}
+
 {% block content %}
 <div class="container mt-4">
+    <h3>Daily Stock Update – {{ selected_date|date:"d M Y" }}</h3>
 
-<h3>Daily Stock Update – {{ selected_date }}
-</h3>
-{% if messages %}
-  {% for message in messages %}
-    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-      {{ message }}
-    </div>
-  {% endfor %}
-{% endif %}
-<form method="get" class="row g-2 mb-3">
-  <div class="col-md-3">
-    <select name="branch" class="form-control"
-      {% if role not in 'admin super_admin' %}disabled{% endif %}>
-      {% for b in branches %}
-        <option value="{{ b.pk }}" {% if b == branch %}selected{% endif %}>
-          {{ b.branch_name }}
-        </option>
-      {% endfor %}
-    </select>
-  </div>
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
 
-  {% if role == 'super_admin' %}
-  <div class="col-md-3">
-    <input type="date" name="date" class="form-control" value="{{ selected_date }}">
-  </div>
-  {% endif %}
+    <form method="get" class="row g-2 mb-3">
+        <div class="col-md-3">
+            <select name="branch" class="form-control" {% if role not in 'admin super_admin' %}disabled{% endif %}>
+                {% for b in branches %}
+                    <option value="{{ b.pk }}" {% if b == branch %}selected{% endif %}>
+                        {{ b.branch_name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
 
-  <div class="col-md-2">
-    <button class="btn btn-primary">Filter</button>
-  </div>
-</form>
+        {% if role == 'super_admin' %}
+        <div class="col-md-3">
+            <input type="date" name="date" class="form-control" value="{{ selected_date|date:'Y-m-d' }}">
+        </div>
+        {% endif %}
 
-<form method="post">
-{% csrf_token %}
-{{ formset.management_form }}
+        <div class="col-md-2">
+            <button class="btn btn-primary">Filter</button>
+        </div>
+    </form>
 
-<table class="table table-bordered table-sm">
-<thead>
-<tr>
-<th>Item</th><th>Opening</th><th>Purchase</th><th>Total</th>
-<th>Sales</th><th>Live Used</th><th>Closing</th><th>Live Closing</th>
-</tr>
-</thead>
+    <form method="post">
+        {% csrf_token %}
+        {{ formset.management_form }}
 
-<tbody>
-{% for category, items in category_items.items %}
-<tr class="table-secondary">
-<td colspan="8"><b>{{ category.category_name }}</b></td>
-</tr>
+        <div class="table-responsive">
+            
+                    {% for category, items in category_items.items %}
+                    <table class="table table-bordered table-sm">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Item</th>
+                                <th>Opening</th>
+                                <th>Purchase</th>
+                                <th>Total</th>
+                                <th>Sales</th>
+                                <th>Spoilage</th>
+                                <th>Actual</th>
+                                <th>Closing</th>
+                                <th>Weight Loss</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <tr class="table-secondary">
+                            <td colspan="9">
+                                <strong>{{ category.category_name }}</strong>
+                            </td>
+                        </tr>
 
-{% for form in formset %}
-{% if form.initial.item_obj.category == category %}
-<tr class="item-row"
-    data-category="{{ category.pk }}"
-    data-multiplier="{{ form.initial.multiplier }}"
-    data-is-live="{{ form.initial.item_obj.is_live|yesno:'1,0' }}">
+                        {% for form in formset %}
+                            {% if form.initial.item_obj.category == category %}
+                            <tr class="item-row" data-multiplier="{{ form.initial.multiplier|floatformat:3 }}" data-is-live="{{ form.initial.item_obj.is_live|yesno:'1,0' }}">
 
-<td>{{ form.initial.item_obj.name }}
-    {{ form.item }}</td>
-<td class="opening">{{ form.opening_stock }}</td>
-<td class="purchase">{{ form.purchase_stock }}</td>
-<td>{{ form.total_stock }}</td>
-<td class="sales">{{ form.todays_sales }}</td>
-<td class="live-used-row">{{ form.live_weight_derived }}</td>
-<td class="closing">{{ form.closing_stock }}</td>
-<td>
-    {{ form.live_weight_closing }}
-</td>
-</tr>
-{% endif %}
-{% endfor %}
+                            <td>
+                                {{ form.item }}  <!-- hidden, required -->
+                                <strong>{{ form.initial.item_obj.name }}</strong><br>
+                                <small>{{ form.initial.item_obj.code }}</small>
+                            </td>
 
-<tr class="table-info totals-row"
-    data-category="{{ category.pk }}"
-    data-live-available="{{ category.summary.total_live_available }}"
-    data-live-used="{{ category.summary.live_used }}">
-<td><b>Totals</b></td>
-<td class="t-opening">0</td>
-<td class="t-purchase">0</td>
-<td class="t-total">0</td>
-<td class="t-sales">0</td>
-<td class="t-live-used">{{ category.summary.live_used }}</td>
-<td class="t-closing">0</td>
-<td class="t-live-closing">0</td>
-</tr>
+                            <!-- Add class for JS to find it -->
+                            <td class="opening-display">{{ form.initial.opening_stock|floatformat:3 }}</td>
+                            <td class="purchase-display">{{ form.initial.purchase_stock|floatformat:3 }}</td>
+                            <td class="total-display">{{ form.initial.total_stock|floatformat:3 }}</td>
+                            <td class="sales-display">{{ form.initial.todays_sales|floatformat:3 }}</td>
 
-<tr class="table-warning summary-row" data-category="{{ category.pk }}">
-<td colspan="8">
-<b>Expected:</b> <span class="exp-formula"></span><br>
-<b>Actual:</b> <span class="act-formula"></span><br>
-<b>Loss:</b> <span class="loss-formula"></span><br>
-<b>Loss %:</b> <span class="loss-pct-formula"></span>
-</td>
-</tr>
+                            <td>
+                                {{ form.spoilage }}  <!-- editable -->
+                                <input type="hidden" name="{{ form.prefix }}-live_spoilage" value="{{ form.initial.live_spoilage|floatformat:3 }}">
+                            </td>
 
-{% endfor %}
-</tbody>
-</table>
+                            <td class="actual-display">
+                                <span class="actual-value">{{ form.initial.actual_stock|floatformat:3 }}</span>
+                                <input type="hidden" name="{{ form.prefix }}-actual_stock" value="{{ form.initial.actual_stock|floatformat:3 }}">
+                                <input type="hidden" name="{{ form.prefix }}-live_actual_stock" value="{{ form.initial.live_actual_stock|floatformat:3 }}">
+                            </td>
 
-<button class="btn btn-success">Save</button>
-</form>
+                            <td>
+                                {{ form.closing_stock }}  <!-- editable -->
+                                <input type="hidden" name="{{ form.prefix }}-live_weight_closing" value="{{ form.initial.live_weight_closing|floatformat:3 }}">
+                            </td>
+
+                            <td class="weight-loss-display">
+                                <span class="weight-loss-value">{{ form.initial.weight_loss|floatformat:3 }}</span>
+                                <input type="hidden" name="{{ form.prefix }}-weight_loss" value="{{ form.initial.weight_loss|floatformat:3 }}">
+                                <input type="hidden" name="{{ form.prefix }}-live_weight_loss" value="{{ form.initial.live_weight_loss|floatformat:3 }}">
+                            </td>
+
+                        </tr>
+                            {% endif %}
+                        {% endfor %}
+                         </tbody>
+                    </table>
+                    {% endfor %}
+               
+        </div>
+
+        <button type="submit" class="btn btn-success mt-3">Save Daily Update</button>
+    </form>
 </div>
 
 <script>
-function num(v){ return parseFloat(v || 0); }
+document.addEventListener('DOMContentLoaded', () => {
+    console.log("JS loaded – ready to calculate");
 
-function recalc(catId) {
-  let opening=0,purchase=0,sales=0,closing=0;
-  let totalLiveClosing=0, liveBirdClosing=0;
+    function recalcRow(row) {
+        console.log("Recalculating row:", row);
 
-  document.querySelectorAll(`tr.item-row[data-category="${catId}"]`).forEach(r=>{
-    opening += num(r.querySelector('.opening input')?.value);
-    purchase += num(r.querySelector('.purchase input')?.value);
-    sales += num(r.querySelector('.sales input')?.value);
-    closing += num(r.querySelector('.closing input')?.value);
+        // Safe multiplier parsing
+        let multiplierStr = row.dataset.multiplier || '1';
+        console.log("Raw multiplier:", multiplierStr);
+        const multiplier = parseFloat(multiplierStr) || 1;
+        console.log("Parsed multiplier:", multiplier);
 
-    const cl = num(r.querySelector('.closing input')?.value);
-    const m  = num(r.dataset.multiplier);
-    const lc = cl * m;
+        // Get inputs safely
+        const spoilageInput = row.querySelector('input[name$="-spoilage"]');
+        const closingInput = row.querySelector('input[name$="-closing_stock"]');
 
-    totalLiveClosing += lc;
-    if (r.dataset.isLive === "1") liveBirdClosing += lc;
+        const spoilage = spoilageInput ? parseFloat(spoilageInput.value || 0) : 0;
+        const closing = closingInput ? parseFloat(closingInput.value || 0) : 0;
 
-    r.querySelector('.live-closing').value = lc.toFixed(3);
-  });
+        console.log("Spoilage:", spoilage, "Closing:", closing);
 
-  const t = document.querySelector(`tr.totals-row[data-category="${catId}"]`);
-  t.querySelector('.t-opening').innerText = opening.toFixed(3);
-  t.querySelector('.t-purchase').innerText = purchase.toFixed(3);
-  t.querySelector('.t-total').innerText = (opening + purchase).toFixed(3);
-  t.querySelector('.t-sales').innerText = sales.toFixed(3);
-  t.querySelector('.t-closing').innerText = closing.toFixed(3);
-  t.querySelector('.t-live-closing').innerText = totalLiveClosing.toFixed(3);
+        // Base values from displayed text (reliable)
+        const opening = parseFloat(row.querySelector('.opening-display')?.innerText || 0);
+        const purchase = parseFloat(row.querySelector('.purchase-display')?.innerText || 0);
+        const sales = parseFloat(row.querySelector('.sales-display')?.innerText || 0);
 
-  const tla = num(t.dataset.liveAvailable);
-  const lu  = num(t.dataset.liveUsed);
+        console.log("Base values → Opening:", opening, "Purchase:", purchase, "Sales:", sales);
 
-  const expected = tla - lu;
-  const actual = liveBirdClosing + totalLiveClosing;
-  const loss = expected - actual;
-  const lossPct = tla > 0 ? (loss / tla) * 100 : 0;
+        // Calculations
+        const totalStock = opening + purchase;
+        const actual = (totalStock - sales) - spoilage;
+        const weightLoss = actual - closing;
 
-  const s = document.querySelector(`tr.summary-row[data-category="${catId}"]`);
-  s.querySelector('.exp-formula').innerText =
-    `Expected = ${tla.toFixed(2)} - ${lu.toFixed(2)} = ${expected.toFixed(2)}`;
-  s.querySelector('.act-formula').innerText =
-    `Actual = ${liveBirdClosing.toFixed(2)} + ${totalLiveClosing.toFixed(2)} = ${actual.toFixed(2)}`;
-  s.querySelector('.loss-formula').innerText =
-    `Loss = ${expected.toFixed(2)} - ${actual.toFixed(2)} = ${loss.toFixed(2)}`;
-  s.querySelector('.loss-pct-formula').innerText =
-    `Loss % = (${loss.toFixed(2)} / ${tla.toFixed(2)}) × 100 = ${lossPct.toFixed(2)} %`;
-}
+        const liveOpening = opening * multiplier;
+        const livePurchase = purchase * multiplier;
+        const liveTotal = liveOpening + livePurchase;
+        const liveSales = sales * multiplier;
+        const liveSpoilage = spoilage * multiplier;
+        const liveActual = actual * multiplier;
+        const liveClosing = closing * multiplier;
+        const liveWeightLoss = liveActual - liveClosing;
 
-document.querySelectorAll('.closing input').forEach(i=>{
-  i.addEventListener('input',()=>recalc(i.closest('tr').dataset.category));
+        console.log("Calculated → Actual:", actual, "Weight Loss:", weightLoss);
+
+        // Update hidden fields
+        const updateField = (name, val) => {
+            const field = row.querySelector(`input[name$="${name}"]`);
+            if (field) {
+                field.value = val.toFixed(3);
+                console.log(`Updated ${name}: ${val.toFixed(3)}`);
+            } else {
+                console.warn(`Field not found: ${name}`);
+            }
+        };
+
+        updateField("-total_stock", totalStock);
+        updateField("-actual_stock", actual);
+        updateField("-weight_loss", weightLoss);
+
+        updateField("-live_opening_stock", liveOpening);
+        updateField("-live_purchase_stock", livePurchase);
+        updateField("-live_total_stock", liveTotal);
+        updateField("-live_todays_sales", liveSales);
+        updateField("-live_spoilage", liveSpoilage);
+        updateField("-live_actual_stock", liveActual);
+        updateField("-live_weight_closing", liveClosing);
+        updateField("-live_weight_loss", liveWeightLoss);
+
+        // Update visible text
+        const setText = (selector, val) => {
+            const el = row.querySelector(selector);
+            if (el) el.innerText = val.toFixed(3);
+        };
+
+        setText('.total-display', totalStock);
+        setText('.actual-value', actual);
+        setText('.weight-loss-value', weightLoss);
+    }
+
+    // Attach listeners
+    document.querySelectorAll('input[name$="-spoilage"], input[name$="-closing_stock"]').forEach(input => {
+        input.addEventListener('input', function() {
+            const row = this.closest('.item-row');
+            if (row) {
+                console.log("Input changed:", this.name);
+                recalcRow(row);
+            }
+        });
+    });
+
+    // Run initial calculation
+    console.log("Running initial recalc for all rows");
+    document.querySelectorAll('.item-row').forEach(row => recalcRow(row));
 });
-
-document.querySelectorAll('tr.totals-row').forEach(r=>recalc(r.dataset.category));
 </script>
-
 {% endblock %}

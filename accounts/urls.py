@@ -99,6 +99,11 @@ urlpatterns = [
     path('YieldPercentage-values/', views.YieldPercentage_value_list, name='YieldPercentage_value_list'),
     path('YieldPercentage-values/add', views.YieldPercentage_add, name='YieldPercentage_add'),
     path('YieldPercentage-values/<int:pk>/update', views.YieldPercentage_update, name='YieldPercentage_update'),
+
+    #YieldPercentage values Urls
+    path('PettyCashBalance-values/', views.PettyCashBalance_list, name='PettyCashBalance_list'),
+    path('PettyCashBalance-values/add', views.PettyCashBalance_add, name='PettyCashBalance_add'),
+    path('PettyCashBalance-values/<int:pk>/update', views.PettyCashBalance_update, name='PettyCashBalance_update'),
     
     # Daily Stock Update (new)
     path('daily-stock/update/', views.daily_stock_update, name='daily_stock_update'),

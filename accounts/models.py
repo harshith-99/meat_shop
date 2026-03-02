@@ -274,7 +274,8 @@ class WholesalePayment(models.Model):
 
 class ExpenseCategory(models.Model):
     expense_name = models.TextField(blank=True, null=True)
-    description = models.TextField(blank=True, null=True)
+    description = models.TextField(blank=True, null=True)   
+    type = models.CharField(max_length=20,blank=True, null=True)
     delete_status = models.BooleanField(default=False)
     
     def __str__(self):
@@ -304,12 +305,22 @@ class DailystockUpdate(models.Model):
     item = models.ForeignKey(Item, on_delete=models.CASCADE)
     date = models.DateField()
     opening_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    live_opening_stock= models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     purchase_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    live_purchase_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     total_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    live_total_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     todays_sales = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
-    live_weight_derived = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    live_todays_sales = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    spoilage = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    live_spoilage = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    actual_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    live_actual_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    #live_weight_derived = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     closing_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)  # ← Manual
     live_weight_closing = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    weight_loss = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    live_weight_loss = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     branch = models.ForeignKey(Branch, on_delete=models.CASCADE, null=True, blank=True)
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -320,3 +331,6 @@ class DailystockUpdate(models.Model):
 
     def __str__(self):
         return f"{self.item.name} - {self.date}"
+    
+class PettyCashBalance(models.Model):
+    balance = models.DecimalField(max_digits=12, decimal_places=3, default=10000.000)

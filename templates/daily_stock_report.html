@@ -1,95 +1,77 @@
 {% load static %}
 {% include "sidebar/sidebar.html" %}
+
 {% block content %}
 <div class="container mt-4">
 
-<h3>Daily Stock Report – {{ selected_date }}</h3>
+    <h3>Daily Stock Report – {{ selected_date|date:"d M Y" }}</h3>
 
-<form method="get" class="row g-2 mb-3">
-  {% if role in 'admin super_admin' %}
-  <div class="col-md-3">
-    <select name="branch" class="form-control">
-      {% for b in branches %}
-        <option value="{{ b.pk }}" {% if b == branch %}selected{% endif %}>
-          {{ b.branch_name }}
-        </option>
-      {% endfor %}
-    </select>
-  </div>
-  {% endif %}
+    <form method="get" class="row g-2 mb-3">
+        {% if role in 'admin super_admin' %}
+        <div class="col-md-3">
+            <select name="branch" class="form-control">
+                {% for b in branches %}
+                    <option value="{{ b.pk }}" {% if b == branch %}selected{% endif %}>
+                        {{ b.branch_name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
 
-  <div class="col-md-3">
-    <input type="date" name="date" class="form-control" value="{{ selected_date }}">
-  </div>
+        <div class="col-md-3">
+            <input type="date" name="date" class="form-control" value="{{ selected_date|date:'Y-m-d' }}">
+        </div>
 
-  <div class="col-md-2">
-    <button class="btn btn-primary">View</button>
-  </div>
-</form>
+        <div class="col-md-2">
+            <button class="btn btn-primary">View Report</button>
+        </div>
+    </form>
 
-<table class="table table-bordered table-sm">
-<thead>
-<tr class="table-light">
-<th>Item</th>
-<th>Opening</th>
-<th>Purchase</th>
-<th>Total</th>
-<th>Sales</th>
-<th>Live Used</th>
-<th>Closing</th>
-<th>Live Closing</th>
-</tr>
-</thead>
+    {% if category_items %}
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>Item</th>
+                        <th>Opening Stock</th>
+                        <th>Purchase Stock</th>
+                        <th>Total Stock</th>
+                        <th>Today's Sales</th>
+                        <th>Spoilage</th>
+                        <th>Actual Stock</th>
+                        <th>Closing Stock</th>
+                        <th>Weight Loss</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for category, rows in category_items.items %}
+                        <tr class="table-secondary">
+                            <td colspan="9"><strong>{{ category.category_name }}</strong></td>
+                        </tr>
 
-<tbody>
-{% for category, rows in category_items.items %}
-<tr class="table-secondary">
-<td colspan="8"><b>{{ category.category_name }}</b></td>
-</tr>
-
-{% for r in rows %}
-<tr>
-<td>{{ r.item.name }}</td>
-<td>{{ r.opening_stock }}</td>
-<td>{{ r.purchase_stock }}</td>
-<td>{{ r.total_stock }}</td>
-<td>{{ r.todays_sales }}</td>
-<td>{{ r.live_weight_derived }}</td>
-<td>{{ r.closing_stock }}</td>
-<td>{{ r.live_weight_closing }}</td>
-</tr>
-{% endfor %}
-
-<tr class="table-info">
-<td><b>Totals</b></td>
-<td>{{ category.summary.opening }}</td>
-<td>{{ category.summary.purchase }}</td>
-<td>{{ category.summary.total_stock }}</td>
-<td>{{ category.summary.sales }}</td>
-<td>{{ category.summary.live_used }}</td>
-<td>{{ category.summary.closing }}</td>
-<td>{{ category.summary.live_closing }}</td>
-</tr>
-
-<tr class="table-warning">
-<td colspan="8">
-<b>Expected:</b>
-{{ category.summary.total_live_available }} - {{ category.summary.live_used }}
-= {{ category.summary.expected }} kg
-&nbsp; | &nbsp;
-<b>Actual:</b>
-{{ category.summary.live_bird_closing }} + {{ category.summary.live_closing }}
-= {{ category.summary.actual }} kg
-&nbsp; | &nbsp;
-<b>Loss:</b> {{ category.summary.loss }} kg
-&nbsp; | &nbsp;
-<b>Loss %:</b> {{ category.summary.loss_pct|floatformat:2 }} %
-</td>
-</tr>
-
-{% endfor %}
-</tbody>
-</table>
+                        {% for r in rows %}
+                            <tr>
+                                <td>{{ r.item.name }} <small>({{ r.item.code }})</small></td>
+                                <td>{{ r.opening_stock|floatformat:3 }}</td>
+                                <td>{{ r.purchase_stock|floatformat:3 }}</td>
+                                <td>{{ r.total_stock|floatformat:3 }}</td>
+                                <td>{{ r.todays_sales|floatformat:3 }}</td>
+                                <td>{{ r.spoilage|floatformat:3 }}</td>
+                                <td>{{ r.actual_stock|floatformat:3 }}</td>
+                                <td>{{ r.closing_stock|floatformat:3 }}</td>
+                                <td>{{ r.weight_loss|floatformat:3 }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="alert alert-info mt-3">
+            No stock update records found for the selected date and branch.
+        </div>
+    {% endif %}
 
 </div>
 {% endblock %}

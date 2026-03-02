@@ -1,6 +1,7 @@
 {% load static %}
 {% include "sidebar/sidebar.html" %}
 {% load humanize %}
+
 {% block content %}
 <div class="container-fluid">
     <h1 class="h3 mb-4 text-gray-800">Expenses</h1>
@@ -22,7 +23,7 @@
                     <select name="branch" class="form-control">
                         <option value="">All Branches</option>
                         {% for b in branches %}
-                        <option value="{{ b.branch_id }}" {% if selected_branch.branch_id == b.branch_id %}selected{% endif %}>
+                        <option value="{{ b.branch_id }}" {% if selected_branch and selected_branch.branch_id == b.branch_id %}selected{% endif %}>
                             {{ b.branch_name }}
                         </option>
                         {% endfor %}
@@ -30,13 +31,16 @@
                 </div>
                 {% endif %}
                 <div class="col-md-3">
-                    <input type="date" name="from_date" class="form-control" value="{{ from_date|default:'' }}">
+                    <label class="form-label">From Date</label>
+                    <input type="date" name="from_date" class="form-control" value="{{ from_date }}">
                 </div>
                 <div class="col-md-3">
-                    <input type="date" name="to_date" class="form-control" value="{{ to_date|default:'' }}">
+                    <label class="form-label">To Date</label>
+                    <input type="date" name="to_date" class="form-control" value="{{ to_date }}">
                 </div>
-                <div class="col-md-3">
-                    <button type="submit" class="btn btn-primary">Filter</button>
+                <div class="col-md-3 align-self-end">
+                    <button type="submit" class="btn btn-primary mt-4">Filter</button>
+                    <a href="{% url 'expense_list' %}" class="btn btn-secondary mt-4">Show Today Only</a>
                 </div>
             </form>
         </div>
@@ -50,11 +54,11 @@
                         <tr>
                             <th>Date</th>
                             <th>Category</th>
-                            <th>Amount</th>
                             <th>Mode</th>
                             <th>Staff</th>
                             <th>Description</th>
                             <th>Branch</th>
+                            <th>Amount</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -62,16 +66,34 @@
                         <tr>
                             <td>{{ e.payment_date|date:"d/m/Y" }}</td>
                             <td>{{ e.expense.expense_name }}</td>
-                            <td>₹{{ e.amount|floatformat:2|intcomma }}</td>
                             <td>{{ e.get_payment_mode_display }}</td>
                             <td>{{ e.staff.name|default:"—" }}</td>
                             <td>{{ e.description|default:"—" }}</td>
                             <td>{{ e.branch.branch_name|default:"—" }}</td>
+                            <td>₹{{ e.amount|floatformat:2|intcomma }}</td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="7" class="text-center">No expenses found.</td></tr>
+                        <tr><td colspan="7" class="text-center">No expenses found for the selected period.</td></tr>
                         {% endfor %}
                     </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="6" class="text-end">Total Expense (All Types):</td>
+                            <td>₹{{ total_expense|floatformat:2|intcomma }}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="6" class="text-end">Petty Cash Balance:</td>
+                            <td>₹{{ petty_cash_balance|floatformat:2|intcomma }}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="6" class="text-end">Closing Petty Cash:</td>
+                            <td>₹{{ closing_petty_cash|floatformat:2|intcomma }}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="6" class="text-end">Actual Expense (Only Expense Type):</td>
+                            <td>₹{{ actual_expense|floatformat:2|intcomma }}</td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>

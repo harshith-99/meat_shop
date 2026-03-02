@@ -1,30 +1,64 @@
 from django import forms
-from .models import DailystockUpdate,YieldPercentage,ExpenseCategory,Expense,CustomUser,Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance,WholesalePayment
+from .models import PettyCashBalance,DailystockUpdate,YieldPercentage,ExpenseCategory,Expense,CustomUser,Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance,WholesalePayment
 from django.forms import modelformset_factory
 from django.forms import inlineformset_factory
 from django.core.exceptions import ValidationError
 from decimal import Decimal
 
+from django import forms
+from .models import DailystockUpdate
+from decimal import Decimal
+
+
 class DailyStockUpdateForm(forms.ModelForm):
     class Meta:
         model = DailystockUpdate
         fields = [
-            'item', 'opening_stock', 'purchase_stock', 'total_stock',
-            'todays_sales', 'live_weight_derived', 'closing_stock', 'live_weight_closing'
+            'item',
+            'opening_stock',
+            'live_opening_stock',
+            'purchase_stock',
+            'live_purchase_stock',
+            'total_stock',
+            'live_total_stock',
+            'todays_sales',
+            'live_todays_sales',
+            'spoilage',
+            'live_spoilage',
+            'actual_stock',
+            'live_actual_stock',
+            'closing_stock',
+            'live_weight_closing',
+            'weight_loss',
+            'live_weight_loss',
         ]
+
         widgets = {
             'item': forms.HiddenInput(),
             'opening_stock': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+            'live_opening_stock': forms.HiddenInput(),
             'purchase_stock': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+            'live_purchase_stock': forms.HiddenInput(),
             'total_stock': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+            'live_total_stock': forms.HiddenInput(),
             'todays_sales': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
-            'live_weight_derived': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
-            'closing_stock': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001'}),
-            'live_weight_closing': forms.NumberInput(attrs={
-                'class': 'form-control live-closing',
-                'readonly': 'readonly'
-            }),
+            'live_todays_sales': forms.HiddenInput(),
+            'spoilage': forms.NumberInput(attrs={'class': 'form-control spoilage-input', 'step': '0.001', 'min': '0'}),
+            'live_spoilage': forms.HiddenInput(),
+            'actual_stock': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+            'live_actual_stock': forms.HiddenInput(),
+            'closing_stock': forms.NumberInput(attrs={'class': 'form-control closing-input', 'step': '0.001', 'min': '0'}),
+            'live_weight_closing': forms.HiddenInput(),
+            'weight_loss': forms.NumberInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+            'live_weight_loss': forms.HiddenInput(),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make all fields except editable ones NOT required
+        for field_name in self.fields:
+            if field_name not in ['spoilage', 'closing_stock']:
+                self.fields[field_name].required = False
 
 class YieldPercentageForm(forms.ModelForm):
     item = forms.ModelChoiceField(
@@ -44,17 +78,47 @@ class YieldPercentageForm(forms.ModelForm):
         model = YieldPercentage
         fields = ['item','yeild_percentage','multipler']
 
+class PettyCashBalanceForm(forms.ModelForm):
+    balance = forms.DecimalField(
+        widget = forms.NumberInput(attrs = {'class' :'form-control','autocomplete': 'off', 'step': '0.01'})
+    )
+    class Meta:
+        model = PettyCashBalance
+        fields = ['balance']
+
 class ExpenseCategoryForm(forms.ModelForm):
     expense_name = forms.CharField(
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Expense Name'}),
         max_length=150
     )
+
     description = forms.CharField(
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Description'}),
     )
+
+    # New radio button field for type
+    type = forms.ChoiceField(
+        choices=[
+            ('purchase', 'Purchase'),
+            ('expense', 'Expense'),
+        ],
+        widget=forms.RadioSelect(attrs={
+            'class': 'form-check-input'
+        }),
+        required=True,  # or False if you want to allow empty
+        label="Type"
+    )
+
     class Meta:
         model = ExpenseCategory
-        fields = ['expense_name', 'description']
+        fields = ['type', 'expense_name', 'description']  # order matters for display
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Optional: Add Bootstrap classes to radio buttons container
+        self.fields['type'].widget.attrs.update({
+            'class': 'form-check'
+        })
 
 class ExpenseForm(forms.ModelForm):
     expense = forms.ModelChoiceField(

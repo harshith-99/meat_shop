@@ -22,6 +22,7 @@
                         <th>#</th>
                         <th>Category Name</th>
                         <th>Description</th>
+                        <th>Type</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -31,6 +32,7 @@
                         <td>{{ forloop.counter }}</td>
                         <td>{{ cat.expense_name }}</td>
                         <td>{{ cat.description|default:"—" }}</td>
+                        <td>{{ cat.type|default:"—" }}</td>
                         <td>
                             <a href="{% url 'expense_category_update' cat.pk %}" class="btn btn-warning btn-sm">Edit</a>
                             <a href="{% url 'expense_category_delete' cat.pk %}" class="btn btn-danger btn-sm"

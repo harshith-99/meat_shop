@@ -1,0 +1,108 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Customer Ledger - {{ selected_customer.customer_name|default:"All" }}</title>
+    <style>
+        /* your existing styles ... */
+        .debug { color: #666; font-size: 11px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        {% if logo_path %}
+            <img src="{{ logo_path }}" class="logo" alt="Company Logo">
+        {% endif %}
+        <h1>Customer Ledger</h1>
+        {% if selected_customer %}
+            <p><strong>Customer:</strong> {{ selected_customer.customer_name }}</p>
+        {% else %}
+            <p><strong>All Wholesale Customers</strong></p>
+        {% endif %}
+        <p class="period">
+            Period: <strong>{{ from_date|date:"d/m/Y" }}</strong> to 
+            <strong>{{ to_date|date:"d/m/Y" }}</strong>
+        </p>
+    </div>
+
+    <div class="debug">
+        Debug: {{ ledger_rows|length }} rows found | 
+        Opening balance: {{ ledger_rows.0.balance|default:"0.00"|floatformat:2 }}
+    </div>
+
+    <hr>
+
+    {% if ledger_rows %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Particular</th>
+                    <th>Receipt No</th>
+                    <th>Debit </th>
+                    <th>Credit </th>
+                    <th>Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in ledger_rows %}
+                    {% if forloop.first and row.particular == 'Opening Balance' %}
+                        <tr class="table-warning fw-bold">
+                            <td colspan="4">Opening Balance</td>
+                            <td class="text-end text-danger">
+                                {% if row.balance > 0 %}{{ row.balance|floatformat:2|intcomma }}{% endif %}
+                            </td>
+                            <td class="text-end text-success">
+                                {% if row.balance < 0 %}{{ row.balance|floatformat:2|intcomma }}{% endif %}
+                            </td>
+                            <td class="text-end fw-bold">{{ row.balance|floatformat:2|intcomma }}</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td>{{ row.date|date:"d/m/Y" }}</td>
+                            <td class="text-center">{{ row.type }}</td>
+                            <td>{{ row.particular }}</td>
+                            <td>{{ row.receipt_no }}</td>
+                            <td class="text-end text-danger">
+                                {% if row.debit %}{{ row.debit|floatformat:2|intcomma }}{% endif %}
+                            </td>
+                            <td class="text-end text-success">
+                                {% if row.credit %}{{ row.credit|floatformat:2|intcomma }}{% endif %}
+                            </td>
+                            <td class="text-end fw-bold">{{ row.balance|floatformat:2|intcomma }}</td>
+                        </tr>
+                    {% endif %}
+                {% endfor %}
+
+                <tr class="total-row">
+                    <td colspan="4" class="text-end">GRAND TOTAL</td>
+                    <td class="text-end text-danger">{{ total_debit|floatformat:2|intcomma }}</td>
+                    <td class="text-end text-success">{{ total_credit|floatformat:2|intcomma }}</td>
+                    <td class="text-end fw-bold">{{ closing_balance|floatformat:2|intcomma }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p style="text-align: right; margin-top: 20px;">
+            <strong>Closing Balance as on {{ to_date|date:"d/m/Y" }}:</strong> 
+            {{ closing_balance|floatformat:2|intcomma }}
+        </p>
+    {% else %}
+        <p style="text-align: center; color: #777; margin: 40px 0; font-size: 16px;">
+            No transactions found for <strong>{{ selected_customer.customer_name|default:"the selected customer" }}</strong><br>
+            between <strong>{{ from_date|date:"d/m/Y" }}</strong> and <strong>{{ to_date|date:"d/m/Y" }}</strong>.
+        </p>
+        <p style="text-align: center; color: #888;">
+            (Debug: {{ ledger_rows|length }} rows in ledger_rows)
+        </p>
+    {% endif %}
+
+    <div class="footer">
+        Generated on {{ today|date:"d M Y H:i" }} by Jaan Chicken Management System
+    </div>
+
+</body>
+</html>
