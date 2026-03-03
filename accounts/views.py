@@ -819,16 +819,14 @@ def expense_list(request):
     user = request.user
     is_admin_like = user.role in ['admin', 'super_admin']
 
-    # Filters
+    today = date.today()
+
+    # Get filter values from GET
     branch_id = request.GET.get('branch')
     from_date_str = request.GET.get('from_date')
     to_date_str = request.GET.get('to_date')
 
-    today = date.today()
-
-    expenses = Expense.objects.filter(delete_status=False).select_related('expense', 'staff', 'branch')
-
-    # Default to TODAY if no dates provided
+    # Parse dates safely — default to today only if invalid
     from_date = today
     to_date = today
 
@@ -844,6 +842,14 @@ def expense_list(request):
         except ValueError:
             to_date = today
 
+    # Base queryset with date filter always applied
+    expenses = Expense.objects.filter(
+        delete_status=False,
+        payment_date__gte=from_date,
+        payment_date__lte=to_date
+    ).select_related('expense', 'staff', 'branch')
+
+    # Branch filter
     selected_branch = None
     if is_admin_like:
         if branch_id and branch_id.isdigit():
@@ -858,19 +864,14 @@ def expense_list(request):
 
     expenses = expenses.order_by('-payment_date')
 
-    # ───────── 1. Total Expense (all filtered) ─────────
+    # ───────── Calculations (unchanged) ─────────
     total_expense = expenses.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
-    # ───────── 2. Petty Cash Balance ─────────
-    # Assuming there's only one row or we take the latest/first one
     petty_cash = PettyCashBalance.objects.first()
     petty_cash_balance = petty_cash.balance if petty_cash else Decimal('0.00')
 
-    # ───────── 3. Closing Petty Cash ─────────
     closing_petty_cash = petty_cash_balance - total_expense
 
-    # ───────── 4. Actual Expense = Closing Petty Cash - Total of type 'expense' ─────────
-    expense_type = ExpenseCategory.objects.filter(type='expense')
     total_expense_only = expenses.filter(expense__type='expense').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
     actual_expense = closing_petty_cash - total_expense_only
 
@@ -879,10 +880,9 @@ def expense_list(request):
         'branches': Branch.objects.all() if is_admin_like else [],
         'is_admin_like': is_admin_like,
         'selected_branch': selected_branch,
-        'from_date': from_date.strftime('%Y-%m-%d'),  # format for input value
-        'to_date': to_date.strftime('%Y-%m-%d'),
+        'from_date': from_date.strftime('%Y-%m-%d'),  # for input value
+        'to_date': to_date.strftime('%Y-%m-%d'),      # for input value
         'today': today.strftime('%Y-%m-%d'),
-        'total_expense' : total_expense,
         'total_expense': total_expense,
         'petty_cash_balance': petty_cash_balance,
         'closing_petty_cash': closing_petty_cash,
