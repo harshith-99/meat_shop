@@ -2162,9 +2162,10 @@ from datetime import date
 @login_required(login_url='login')
 def retail_sales_list(request):
     is_admin_like = request.user.role in ['super_admin', 'admin']
-    
+
     # === FILTER PARAMETERS ===
     branch_id = request.GET.get('branch')
+    customer_type = request.GET.get('customer_type', 'all')  # all, store, takeaway
     from_date_str = request.GET.get('from_date')
     to_date_str = request.GET.get('to_date')
 
@@ -2189,13 +2190,11 @@ def retail_sales_list(request):
     if branch_id and branch_id.isdigit():
         selected_branch = int(branch_id)
 
-    # === 1. PENDING CREDIT BILLS (Always show, no date filter) ===
+    # === 1. PENDING CREDIT BILLS (any with pending > 0) ===
     credit_sales = RetailSales.objects.filter(
-        payment_mode='pending',
+        pending_amount__gt=0,
         delete_status=False
     ).select_related('branch', 'customer', 'added_by')
-
-
 
     if not is_admin_like:
         credit_sales = credit_sales.filter(branch=request.user.branch)
@@ -2205,14 +2204,14 @@ def retail_sales_list(request):
 
     credit_sales = credit_sales.order_by('-sales_date')
 
-    # === 2. REGULAR FILTERED SALES (With date & branch filter) ===
+    # === 2. REGULAR FILTERED SALES ===
     sales = RetailSales.objects.filter(
         delete_status=False,
         sales_date__gte=from_date,
         sales_date__lte=to_date
-    ).select_related('branch', 'customer', 'added_by')
+    ).select_related('branch', 'customer', 'added_by', 'take_amay_employee')
 
-    # Apply branch filter
+    # Branch filter
     if not is_admin_like:
         if request.user.branch:
             sales = sales.filter(branch=request.user.branch)
@@ -2230,75 +2229,57 @@ def retail_sales_list(request):
             except Branch.DoesNotExist:
                 selected_branch_name = "Unknown Branch"
 
+    # Customer type filter
+    if customer_type == 'store':
+        sales = sales.filter(take_amay_employee__isnull=True)
+    elif customer_type == 'takeaway':
+        sales = sales.filter(take_amay_employee__isnull=False)
+
     sales = sales.order_by('-sales_date')
 
+    # === TOTALS ===
     totals = sales.aggregate(
-    total_subtotal = Sum('total'),
-    total_discount = Sum('discount'),
-    total_grand    = Sum('grand_total'),
-    total_cash     = Sum('total_cash'),
-    total_upi      = Sum('total_upi'),
-    total_card     = Sum('total_card'),
-    total_pending     = Sum('pending_amount'),
-   )
-
-    total_credits = credit_sales.aggregate(
-        credit_total_grand    = Sum('grand_total'),
+        total_subtotal=Sum('total'),
+        total_discount=Sum('discount'),
+        total_grand=Sum('grand_total'),
+        total_cash=Sum('total_cash'),
+        total_upi=Sum('total_upi'),
+        total_card=Sum('total_card'),
+        total_pending=Sum('pending_amount'),
     )
 
-    # === 3. GRAND TOTAL & PAYMENT MODE BREAKDOWN (Only for filtered sales) ===
-    total_grand = sales.aggregate(total=Sum('grand_total'))['total'] or Decimal('0.00')
+    credit_totals = credit_sales.aggregate(
+        credit_grand=Sum('grand_total'),
+        credit_pending=Sum('pending_amount'),
+    )
 
-    payment_mode_totals = sales.values('payment_mode').annotate(
-        total=Sum('grand_total')
-    ).order_by('payment_mode')
-
-    # Convert to display-friendly dict
-    mode_display = {
-        'cash': 'Cash',
-        'upi': 'UPI',
-        'online': 'Online',
-        'cheque': 'Cheque',
-        'pending': 'Pending',
-    }
-    payment_mode_totals_dict = {}
-    for item in payment_mode_totals:
-        mode = item['payment_mode']
-        display_name = mode_display.get(mode, mode.title())
-        payment_mode_totals_dict[display_name] = item['total'] or Decimal('0.00')
-
-    
-    # === CONTEXT ===
     context = {
         'sales': sales,
-        'credit_sales': credit_sales,  # Pending credit bills
-        'total_grand': total_grand,
-        'payment_mode_totals': payment_mode_totals_dict,
+        'credit_sales': credit_sales,
+
+        'total_subtotal': totals['total_subtotal'] or Decimal('0.00'),
+        'total_discount': totals['total_discount'] or Decimal('0.00'),
+        'total_grand': totals['total_grand'] or Decimal('0.00'),
+        'total_cash': totals['total_cash'] or Decimal('0.00'),
+        'total_upi': totals['total_upi'] or Decimal('0.00'),
+        'total_card': totals['total_card'] or Decimal('0.00'),
+        'total_pending': totals['total_pending'] or Decimal('0.00'),
+
+        'credit_total_grand': credit_totals['credit_grand'] or Decimal('0.00'),
+        'credit_pending_total': credit_totals['credit_pending'] or Decimal('0.00'),
 
         'branches': Branch.objects.all() if is_admin_like else [],
         'is_admin_like': is_admin_like,
         'selected_branch': selected_branch,
         'selected_branch_name': selected_branch_name,
 
-        # For date inputs
         'from_date_str': from_date_str,
         'to_date_str': to_date_str,
-
-        # For display
         'from_date': from_date,
         'to_date': to_date,
         'today': today.strftime('%Y-%m-%d'),
 
-        'total_subtotal': totals['total_subtotal'] or Decimal('0.00'),
-        'total_discount': totals['total_discount'] or Decimal('0.00'),
-        'total_grand': totals['total_grand'] or Decimal('0.00'),
-
-        'total_cash': totals['total_cash'] or Decimal('0.00'),
-        'total_upi': totals['total_upi'] or Decimal('0.00'),
-        'total_card': totals['total_card'] or Decimal('0.00'),
-        'total_pending': totals['total_pending'] or Decimal('0.00'),
-
-        'credit_total_grand':total_credits['credit_total_grand'] or Decimal('0.00'),
+        'customer_type': customer_type,  # for pre-selecting dropdown
     }
 
     return render(request, 'retail_sales_list.html', context)

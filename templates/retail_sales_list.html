@@ -1,6 +1,6 @@
 {% load static %}
-{% include "sidebar/sidebar.html" %}
 {% load humanize %}
+{% include "sidebar/sidebar.html" %}
 
 {% block content %}
 <div class="container-fluid">
@@ -9,33 +9,41 @@
     <!-- FILTER FORM -->
     <div class="card shadow mb-3">
         <div class="card-body">
-            <form method="get">
-                <div class="row g-2 align-items-end">
-                    {% if is_admin_like %}
-                    <div class="col-md-3">
-                        <label class="form-label">Branch</label>
-                        <select name="branch" class="form-select form-select-sm">
-                            <option value="" {% if not selected_branch %}selected{% endif %}>All Branches</option>
-                            {% for b in branches %}
-                            <option value="{{ b.branch_id }}" {% if selected_branch == b.branch_id %}selected{% endif %}>
-                                {{ b.branch_name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    {% endif %}
-                    <div class="col-md-2">
-                        <label class="form-label">From Date</label>
-                        <input type="date" name="from_date" value="{{ from_date_str }}" class="form-control form-control-sm">
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">To Date</label>
-                        <input type="date" name="to_date" value="{{ to_date_str }}" class="form-control form-control-sm">
-                    </div>
-                    <div class="col">
-                        <button type="submit" class="btn btn-primary btn-sm">Filter</button>
-                        <a href="{% url 'retail_sales_list' %}" class="btn btn-secondary btn-sm">Today</a>
-                    </div>
+            <form method="get" class="row g-2 align-items-end">
+                {% if is_admin_like %}
+                <div class="col-md-3">
+                    <label class="form-label">Branch</label>
+                    <select name="branch" class="form-select form-select-sm">
+                        <option value="" {% if not selected_branch %}selected{% endif %}>All Branches</option>
+                        {% for b in branches %}
+                        <option value="{{ b.branch_id }}" {% if selected_branch == b.branch_id %}selected{% endif %}>
+                            {{ b.branch_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+
+                <div class="col-md-3">
+                    <label class="form-label">Customer Type</label>
+                    <select name="customer_type" class="form-select form-select-sm">
+                        <option value="all" {% if customer_type == 'all' or not customer_type %}selected{% endif %}>All Customers</option>
+                        <option value="store" {% if customer_type == 'store' %}selected{% endif %}>Store Customers</option>
+                        <option value="takeaway" {% if customer_type == 'takeaway' %}selected{% endif %}>Take Away Customers</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">From Date</label>
+                    <input type="date" name="from_date" class="form-control form-control-sm" value="{{ from_date_str }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">To Date</label>
+                    <input type="date" name="to_date" class="form-control form-control-sm" value="{{ to_date_str }}">
+                </div>
+                <div class="col">
+                    <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                    <a href="{% url 'retail_sales_list' %}" class="btn btn-secondary btn-sm">Today</a>
                 </div>
             </form>
         </div>
@@ -49,13 +57,20 @@
                     <strong>Branch:</strong> {{ selected_branch_name|default:"All Branches" }}
                 </div>
                 <div class="col">
+                    <strong>Customer Type:</strong> 
+                    {% if customer_type == 'all' or not customer_type %}All Customers
+                    {% elif customer_type == 'store' %}Store Customers
+                    {% elif customer_type == 'takeaway' %}Take Away Customers
+                    {% endif %}
+                </div>
+                <div class="col">
                     <strong>Date:</strong> {{ from_date|date:"d-m-Y" }} to {{ to_date|date:"d-m-Y" }}
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 1) CREDIT BILLS SECTION -->
+    <!-- 1) PENDING CREDIT BILLS (pending_amount > 0) -->
     {% if credit_sales.exists %}
     <div class="card shadow mb-4 border-danger">
         <div class="card-header bg-danger text-white py-3">
@@ -66,12 +81,13 @@
                 <table class="table table-sm table-bordered table-striped">
                     <thead class="table-danger">
                         <tr>
-                             <th>SI No</th>
+                            <th>SI No</th>
                             <th>Receipt</th>
                             <th>Date</th>
                             <th>Customer</th>
                             <th>Delivered By</th>
-                            <th>Total</th>
+                            <th>Grand Total</th>
+                            <th>Pending</th>
                             <th>Action</th>
                         </tr>
                     </thead>
@@ -81,31 +97,26 @@
                             <td>{{ forloop.counter }}</td>
                             <td>{{ s.receipt_no }}</td>
                             <td>{{ s.sales_date|date:"d/m/Y" }}
-                                <small class="text-muted">
-                                        {{ s.created_date|date:"h:i A" }}
-                                    </small>
+                                <small class="text-muted">{{ s.created_date|date:"h:i A" }}</small>
                             </td>
                             <td>{{ s.customer.customer_name|default:"Walk-in" }}</td>
-                             <td>{{ s.take_amay_employee.name|default:"Walk-in" }}</td>
+                            <td>{{ s.take_amay_employee.name|default:"Walk-in" }}</td>
                             <td class="text-end text-danger fw-bold">₹{{ s.grand_total|floatformat:2|intcomma }}</td>
+                            <td class="text-end text-danger fw-bold">₹{{ s.pending_amount|floatformat:2|intcomma }}</td>
                             <td>
                                 <button type="button" class="btn btn-success btn-sm" 
-                                        onclick="openPayModal('{{ s.pk }}', '{{ s.receipt_no }}', '{{ s.customer.customer_name }}', '{{ s.grand_total }}')">
+                                        onclick="openPayModal('{{ s.pk }}', '{{ s.receipt_no }}', '{{ s.customer.customer_name }}', '{{ s.pending_amount }}')">
                                     Pay Now
                                 </button>
-                                <!-- <a href="{% url 'retail_receipt' s.pk %}?duplicate=1" target="_blank" class="btn btn-info btn-sm">Print</a> -->
                             </td>
                         </tr>
                         {% endfor %}
                         <tr class="table-secondary fw-bold">
-                            <td colspan="5" class="text-end">TOTAL</td>
-
-                            <td class="text-end">
-                                ₹{{ credit_total_grand|floatformat:2|intcomma }}
-                            </td>
+                            <td colspan="5" class="text-end">TOTAL PENDING</td>
+                            <td class="text-end">₹{{ credit_total_grand|floatformat:2|intcomma }}</td>
+                            <td class="text-end">₹{{ credit_pending_total|floatformat:2|intcomma }}</td>
                             <td></td>
                         </tr>
-
                     </tbody>
                 </table>
             </div>
@@ -113,7 +124,7 @@
     </div>
     {% endif %}
 
-    <!-- 2) REGULAR SALES TABLE + SUMMARY (same card) -->
+    <!-- 2) REGULAR SALES TABLE -->
     <div class="card shadow">
         <div class="card-body">
             <div class="table-responsive">
@@ -127,28 +138,24 @@
                             <th>Customer</th>
                             <th>Mode</th>
                             <th>Cash</th>
-                            <th>Upi</th>
+                            <th>UPI</th>
                             <th>Card</th>
                             <th>Pending</th>
                             <th>Sub Total</th>
                             <th>Discount</th>
                             <th>Grand Total</th>
-                            {% if is_admin_like %}
-                            <th>Created By</th>
-                            {% endif %}
+                            {% if is_admin_like %}<th>Created By</th>{% endif %}
                             <th>Take Away</th>
                             <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for s in sales %}
-                        <tr {% if s.payment_mode == 'pending' %}class="table-warning"{% endif %}>
+                        <tr {% if s.pending_amount > 0 %}class="table-warning"{% endif %}>
                             <td>{{ forloop.counter }}</td>
                             <td>{{ s.receipt_no }}</td>
                             <td>{{ s.sales_date|date:"d/m/Y" }}
-                                    <small class="text-muted">
-                                        {{ s.created_date|date:"h:i A" }}
-                                    </small>
+                                <small class="text-muted">{{ s.created_date|date:"h:i A" }}</small>
                             </td>
                             <td>{{ s.branch.branch_name }}</td>
                             <td>{{ s.customer.customer_name|default:"Walk-in" }}</td>
@@ -175,25 +182,21 @@
                             {% endif %}
                             <td class="text-end">
                                 {% if s.take_amay_employee %}
-                                    {{ s.take_amay_employee.Employe.name }}
+                                    {{ s.take_amay_employee.name }}
                                 {% else %}
                                     Store Customer
                                 {% endif %}
                             </td>
-
                             <td>
                                 <a href="{% url 'retail_receipt' s.pk %}?duplicate=1" target="_blank" class="btn btn-info btn-sm">
                                     Print
                                 </a>
-                                    {% if s.pending_amount > 0 %}
-                                        <button type="button" class="btn btn-success btn-sm"
-                                            onclick="openPayModal('{{ s.pk }}', 
-                                                                '{{ s.receipt_no }}', 
-                                                                '{{ s.customer.customer_name }}', 
-                                                                '{{ s.pending_amount }}')">
-                                            Complete Payment
-                                        </button>
-                                    {% endif %}
+                                {% if s.pending_amount > 0 %}
+                                    <button type="button" class="btn btn-success btn-sm"
+                                            onclick="openPayModal('{{ s.pk }}', '{{ s.receipt_no }}', '{{ s.customer.customer_name }}', '{{ s.pending_amount }}')">
+                                        Pay
+                                    </button>
+                                {% endif %}
                                 {% if is_admin_like %}
                                     <button type="button" onclick="deleteSale('{{ s.pk }}')" class="btn btn-danger btn-sm">
                                         Delete
@@ -201,73 +204,29 @@
                                 {% endif %}
                             </td>
                         </tr>
-
                         {% empty %}
-
                         <tr>
-                            <td colspan="{% if is_admin_like %}8{% else %}6{% endif %}" class="text-center">
+                            <td colspan="{% if is_admin_like %}14{% else %}12{% endif %}" class="text-center">
                                 No sales found
                             </td>
                         </tr>
                         {% endfor %}
                         <tr class="table-secondary fw-bold">
                             <td colspan="6" class="text-end">TOTAL</td>
-
-                            <td class="text-end">
-                                ₹{{ total_cash|floatformat:2|intcomma }}
-                            </td>
-
-                             <td class="text-end">
-                                ₹{{ total_upi|floatformat:2|intcomma }}
-                            </td>
-
-                            <td class="text-end">
-                                ₹{{ total_card|floatformat:2|intcomma }}
-                            </td>
-
-                            <td class="text-end">
-                                ₹{{ total_pending|floatformat:2|intcomma }}
-                            </td>
-
-                            <td class="text-end">
-                                ₹{{ total_subtotal|floatformat:2|intcomma }}
-                            </td>
-
-                            <td class="text-end">
-                                ₹{{ total_discount|floatformat:2|intcomma }}
-                            </td>
-
-                            <td class="text-end">
-                                ₹{{ total_grand|floatformat:2|intcomma }}
-                            </td>
-
-                            {% if is_admin_like %}
-                                <td></td>
-                            {% endif %}
+                            <td class="text-end">₹{{ total_cash|floatformat:2|intcomma }}</td>
+                            <td class="text-end">₹{{ total_upi|floatformat:2|intcomma }}</td>
+                            <td class="text-end">₹{{ total_card|floatformat:2|intcomma }}</td>
+                            <td class="text-end">₹{{ total_pending|floatformat:2|intcomma }}</td>
+                            <td class="text-end">₹{{ total_subtotal|floatformat:2|intcomma }}</td>
+                            <td class="text-end">₹{{ total_discount|floatformat:2|intcomma }}</td>
+                            <td class="text-end">₹{{ total_grand|floatformat:2|intcomma }}</td>
+                            {% if is_admin_like %}<td></td>{% endif %}
+                            <td></td>
                             <td></td>
                         </tr>
                     </tbody>
                 </table>
             </div>
-
-            <!-- PAYMENT MODE SUMMARY (inside same card) -->
-            <!-- <div class="mt-4">
-                <h5 class="text-primary mb-3">Payment Summary ({{ from_date|date:"d-m-Y" }} to {{ to_date|date:"d-m-Y" }})</h5>
-                <table class="table table-bordered table-sm w-auto ms-auto">
-                    <tbody>
-                        {% for mode, amount in payment_mode_totals.items %}
-                        <tr>
-                            <td class="text-start fw-bold ps-4">{{ mode }}</td>
-                            <td class="text-end pe-4">₹{{ amount|floatformat:2|intcomma }}</td>
-                        </tr>
-                        {% endfor %}
-                        <tr class="table-primary fw-bold fs-5">
-                            <td class="text-start ps-4">Total Sales</td>
-                            <td class="text-end pe-4">₹{{ total_grand|floatformat:2|intcomma }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div> -->
         </div>
     </div>
 </div>

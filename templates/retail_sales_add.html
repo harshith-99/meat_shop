@@ -630,6 +630,32 @@ $('#id_take_amay_employee').change(function() {
     }
 }).trigger('change');
 
+// Validate that paid amount (cash + upi + card) does not exceed grand total
+function validatePaymentTotals() {
+    const grandTotal = parseFloat($("#id_grand_total").val()) || 0;
+    const cash = parseFloat($("#id_total_cash").val()) || 0;
+    const upi = parseFloat($("#id_total_upi").val()) || 0;
+    const card = parseFloat($("#id_total_card").val()) || 0;
+
+    const paidTotal = cash + upi + card;
+
+    if (paidTotal > grandTotal) {
+        alert("Error: Total paid amount (Cash + UPI + Card) cannot exceed Grand Total!\n\n" +
+              "Paid: ₹" + paidTotal.toFixed(2) + "\n" +
+              "Grand Total: ₹" + grandTotal.toFixed(2));
+        return false;
+    }
+
+    // Optional: also prevent negative pending
+    const pending = parseFloat($("#id_pending_amount").val()) || 0;
+    if (pending < 0) {
+        alert("Pending amount cannot be negative!");
+        return false;
+    }
+
+    return true;
+}
+
 // BLOCK SUBMIT IF ANY ROW HAS TOTAL 0 OR NO ITEM
 $('form').on('submit', function(e) {
     let hasError = false;
@@ -664,6 +690,11 @@ $('form').on('submit', function(e) {
     if (hasError) {
         e.preventDefault();
         alert("Please fix the following:\n\n• " + errors.join("\n• "));
+        return false;
+    }
+    // Add payment validation
+    if (!validatePaymentTotals()) {
+        e.preventDefault();
         return false;
     }
 });
