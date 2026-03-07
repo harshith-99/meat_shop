@@ -890,6 +890,8 @@ def expense_list(request):
     }
     return render(request, 'expense_list.html', context)
 
+
+
 @login_required
 def wholesale_payment_add(request):
     if request.method == "POST":
