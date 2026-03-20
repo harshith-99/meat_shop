@@ -41,174 +41,281 @@
         {{ formset.management_form }}
 
         <div class="table-responsive">
-            
-                    {% for category, items in category_items.items %}
-                    <table class="table table-bordered table-sm">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Item</th>
-                                <th>Opening</th>
-                                <th>Purchase</th>
-                                <th>Total</th>
-                                <th>Sales</th>
-                                <th>Spoilage</th>
-                                <th>Actual</th>
-                                <th>Closing</th>
-                                <th>Weight Loss</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        <tr class="table-secondary">
-                            <td colspan="9">
-                                <strong>{{ category.category_name }}</strong>
-                            </td>
-                        </tr>
 
-                        {% for form in formset %}
-                            {% if form.initial.item_obj.category == category %}
-                            <tr class="item-row" data-multiplier="{{ form.initial.multiplier|floatformat:3 }}" data-is-live="{{ form.initial.item_obj.is_live|yesno:'1,0' }}">
+            {% for category, stats in category_data %}
 
-                            <td>
-                                {{ form.item }}  <!-- hidden, required -->
-                                <strong>{{ form.initial.item_obj.name }}</strong><br>
-                                <small>{{ form.initial.item_obj.code }}</small>
-                            </td>
+            <table class="table table-bordered table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>Item</th>
+                        <th>Opening</th>
+                        <th>Purchase</th>
+                        <th>Total</th>
+                        <th>Sales</th>
+                        <th>Spoilage</th>
+                        <th>Closing</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <tr class="table-secondary">
+                    <td colspan="9">
+                        <strong>{{ category.category_name }}</strong>
+                    </td>
+                </tr>
 
-                            <!-- Add class for JS to find it -->
-                            <td class="opening-display">{{ form.initial.opening_stock|floatformat:3 }}</td>
-                            <td class="purchase-display">{{ form.initial.purchase_stock|floatformat:3 }}</td>
-                            <td class="total-display">{{ form.initial.total_stock|floatformat:3 }}</td>
-                            <td class="sales-display">{{ form.initial.todays_sales|floatformat:3 }}</td>
+                {% for form in formset %}
+                    {% if form.initial.item_obj.category == category %}
+                    <tr class="item-row"
+                        data-multiplier="{{ form.initial.multiplier|floatformat:3 }}"
+                        data-is-live="{{ form.initial.item_obj.is_live|yesno:'1,0' }}"
+                        data-category-id="{{ category.pk }}">
 
-                            <td>
-                                {{ form.spoilage }}  <!-- editable -->
-                                <input type="hidden" name="{{ form.prefix }}-live_spoilage" value="{{ form.initial.live_spoilage|floatformat:3 }}">
-                            </td>
+                        <td>
+                            {{ form.item }}
+                            <strong>{{ form.initial.item_obj.name }}</strong><br>
+                            <small>{{ form.initial.item_obj.code }}</small>
+                        </td>
 
-                            <td class="actual-display">
-                                <span class="actual-value">{{ form.initial.actual_stock|floatformat:3 }}</span>
-                                <input type="hidden" name="{{ form.prefix }}-actual_stock" value="{{ form.initial.actual_stock|floatformat:3 }}">
-                                <input type="hidden" name="{{ form.prefix }}-live_actual_stock" value="{{ form.initial.live_actual_stock|floatformat:3 }}">
-                            </td>
+                        <td class="opening-display">{{ form.initial.opening_stock|floatformat:3 }}</td>
+                        <td class="purchase-display">{{ form.initial.purchase_stock|floatformat:3 }}</td>
+                        <td class="total-display">{{ form.initial.total_stock|floatformat:3 }}</td>
+                        <td class="sales-display">{{ form.initial.todays_sales|floatformat:3 }}</td>
 
-                            <td>
-                                {{ form.closing_stock }}  <!-- editable -->
-                                <input type="hidden" name="{{ form.prefix }}-live_weight_closing" value="{{ form.initial.live_weight_closing|floatformat:3 }}">
-                            </td>
+                        <td>
+                            {{ form.spoilage }}
+                            <input type="hidden" name="{{ form.prefix }}-live_spoilage" value="{{ form.initial.live_spoilage|floatformat:3 }}">
+                        </td>
 
-                            <td class="weight-loss-display">
-                                <span class="weight-loss-value">{{ form.initial.weight_loss|floatformat:3 }}</span>
-                                <input type="hidden" name="{{ form.prefix }}-weight_loss" value="{{ form.initial.weight_loss|floatformat:3 }}">
-                                <input type="hidden" name="{{ form.prefix }}-live_weight_loss" value="{{ form.initial.live_weight_loss|floatformat:3 }}">
-                            </td>
+                        <td class="actual-display" style="display:none">
+                            <span class="actual-value">{{ form.initial.actual_stock|floatformat:3 }}</span>
+                            <input type="hidden" name="{{ form.prefix }}-actual_stock" value="{{ form.initial.actual_stock|floatformat:3 }}">
+                            <input type="hidden" name="{{ form.prefix }}-live_actual_stock" value="{{ form.initial.live_actual_stock|floatformat:3 }}">
+                        </td>
 
-                        </tr>
-                            {% endif %}
-                        {% endfor %}
-                         </tbody>
-                    </table>
-                    {% endfor %}
-               
+                        <td>
+                            {{ form.closing_stock }}
+                            <input type="hidden" name="{{ form.prefix }}-live_weight_closing" value="{{ form.initial.live_weight_closing|floatformat:3 }}">
+                        </td>
+
+                        <td class="weight-loss-display" style="display:none;">
+                            <span class="weight-loss-value">{{ form.initial.weight_loss|floatformat:3 }}</span>
+                            <input type="hidden" name="{{ form.prefix }}-weight_loss" value="{{ form.initial.weight_loss|floatformat:3 }}">
+                            <input type="hidden" name="{{ form.prefix }}-live_weight_loss" value="{{ form.initial.live_weight_loss|floatformat:3 }}">
+                        </td>
+
+                    </tr>
+                    {% endif %}
+                {% endfor %}
+                </tbody>
+            </table>
+
+            {# ── Stats panel immediately after this category's table ── #}
+            <div class="category-stats-panel mb-4 p-3 rounded border"
+                 id="stats-cat-{{ category.pk }}"
+                 style="background:#f8f9fa; border-color:#dee2e6 !important;">
+
+                <div class="d-flex align-items-center mb-2">
+                    <strong class="me-2"> {{ category.category_name }}</strong>
+                    <!-- <small class="text-muted">(Live = weight × multiplier)</small> -->
+                </div>
+
+                <div class="row g-2 text-center">
+
+                    <div class="col-6 col-md-2">
+                        <div class="p-2 rounded bg-white border">
+                            <div class="small text-muted">Live Purchase</div>
+                            <div class="fw-bold"
+                                 id="live-purchase-{{ category.pk }}"
+                                 data-value="{{ stats.total_live_purchase|floatformat:3 }}">
+                                {{ stats.total_live_purchase|floatformat:3 }} kg
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-6 col-md-2">
+                        <div class="p-2 rounded bg-white border">
+                            <div class="small text-muted">Live Sales</div>
+                            <div class="fw-bold"
+                                 id="live-sales-{{ category.pk }}"
+                                 data-value="{{ stats.total_live_sales|floatformat:3 }}">
+                                {{ stats.total_live_sales|floatformat:3 }} kg
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-6 col-md-2">
+                        <div class="p-2 rounded bg-white border">
+                            <div class="small text-muted">Theoretical Loss</div>
+                            <div class="fw-bold"
+                                 id="theo-loss-{{ category.pk }}"
+                                 data-value="{{ stats.theoretical_loss|floatformat:3 }}">
+                                {{ stats.theoretical_loss|floatformat:3 }} kg
+                            </div>
+                            <div class="small" id="theo-loss-pct-{{ category.pk }}">
+                                {{ stats.theoretical_loss_pct|floatformat:2 }} %
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-6 col-md-2">
+                        <div class="p-2 rounded bg-white border">
+                            <div class="small text-muted">Physical Closing</div>
+                            <div class="fw-bold"
+                                 id="phys-close-{{ category.pk }}"
+                                 data-value="{{ stats.physical_loss_weight|floatformat:3 }}">
+                                {{ stats.physical_loss_weight|floatformat:3 }} kg
+                            </div>
+                            <div class="small" id="phys-close-pct-{{ category.pk }}">
+                                {{ stats.physical_loss_pct|floatformat:2 }}%
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-6 col-md-2">
+                        <div class="p-2 rounded bg-white border"
+                             id="stock-loss-card-{{ category.pk }}">
+                            <div class="small text-muted">Stock Loss</div>
+                            <div class="fw-bold"
+                                 id="stock-loss-{{ category.pk }}"
+                                 data-value="{{ stats.stock_loss|floatformat:3 }}">
+                                {{ stats.stock_loss|floatformat:3 }} kg
+                            </div>
+                            <div class="small" id="stock-loss-pct-{{ category.pk }}">
+                                {{ stats.stock_loss_pct|floatformat:2 }}%
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- <div class="mt-2 small text-muted">
+                    <span class="me-3">📐 <em>Theoretical Loss = Live Purchase − Live Sales</em></span>
+                    <span class="me-3">📦 <em>Physical Closing = Σ (Closing × Multiplier)</em></span>
+                    <span>🔴 <em>Stock Loss = Theoretical Loss − Physical Closing</em></span>
+                </div> -->
+            </div>
+
+            {% endfor %}
+
         </div>
 
         <button type="submit" class="btn btn-success mt-3">Save Daily Update</button>
     </form>
+
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("JS loaded – ready to calculate");
 
     function recalcRow(row) {
-        console.log("Recalculating row:", row);
+        const multiplier = parseFloat(row.dataset.multiplier || '1') || 1;
 
-        // Safe multiplier parsing
-        let multiplierStr = row.dataset.multiplier || '1';
-        console.log("Raw multiplier:", multiplierStr);
-        const multiplier = parseFloat(multiplierStr) || 1;
-        console.log("Parsed multiplier:", multiplier);
-
-        // Get inputs safely
         const spoilageInput = row.querySelector('input[name$="-spoilage"]');
-        const closingInput = row.querySelector('input[name$="-closing_stock"]');
+        const closingInput  = row.querySelector('input[name$="-closing_stock"]');
 
         const spoilage = spoilageInput ? parseFloat(spoilageInput.value || 0) : 0;
-        const closing = closingInput ? parseFloat(closingInput.value || 0) : 0;
+        const closing  = closingInput  ? parseFloat(closingInput.value  || 0) : 0;
 
-        console.log("Spoilage:", spoilage, "Closing:", closing);
-
-        // Base values from displayed text (reliable)
-        const opening = parseFloat(row.querySelector('.opening-display')?.innerText || 0);
+        const opening  = parseFloat(row.querySelector('.opening-display')?.innerText  || 0);
         const purchase = parseFloat(row.querySelector('.purchase-display')?.innerText || 0);
-        const sales = parseFloat(row.querySelector('.sales-display')?.innerText || 0);
+        const sales    = parseFloat(row.querySelector('.sales-display')?.innerText    || 0);
 
-        console.log("Base values → Opening:", opening, "Purchase:", purchase, "Sales:", sales);
-
-        // Calculations
         const totalStock = opening + purchase;
-        const actual = (totalStock - sales) - spoilage;
+        const actual     = (totalStock - sales) - spoilage;
         const weightLoss = actual - closing;
 
-        const liveOpening = opening * multiplier;
-        const livePurchase = purchase * multiplier;
-        const liveTotal = liveOpening + livePurchase;
-        const liveSales = sales * multiplier;
-        const liveSpoilage = spoilage * multiplier;
-        const liveActual = actual * multiplier;
-        const liveClosing = closing * multiplier;
+        const liveOpening    = opening  * multiplier;
+        const livePurchase   = purchase * multiplier;
+        const liveTotal      = liveOpening + livePurchase;
+        const liveSales      = sales    * multiplier;
+        const liveSpoilage   = spoilage * multiplier;
+        const liveActual     = actual   * multiplier;
+        const liveClosing    = closing  * multiplier;
         const liveWeightLoss = liveActual - liveClosing;
 
-        console.log("Calculated → Actual:", actual, "Weight Loss:", weightLoss);
-
-        // Update hidden fields
-        const updateField = (name, val) => {
-            const field = row.querySelector(`input[name$="${name}"]`);
-            if (field) {
-                field.value = val.toFixed(3);
-                console.log(`Updated ${name}: ${val.toFixed(3)}`);
-            } else {
-                console.warn(`Field not found: ${name}`);
-            }
+        const updateField = (suffix, val) => {
+            const field = row.querySelector(`input[name$="${suffix}"]`);
+            if (field) field.value = val.toFixed(3);
         };
 
-        updateField("-total_stock", totalStock);
-        updateField("-actual_stock", actual);
-        updateField("-weight_loss", weightLoss);
+        updateField('-total_stock',         totalStock);
+        updateField('-actual_stock',        actual);
+        updateField('-weight_loss',         weightLoss);
+        updateField('-live_opening_stock',  liveOpening);
+        updateField('-live_purchase_stock', livePurchase);
+        updateField('-live_total_stock',    liveTotal);
+        updateField('-live_todays_sales',   liveSales);
+        updateField('-live_spoilage',       liveSpoilage);
+        updateField('-live_actual_stock',   liveActual);
+        updateField('-live_weight_closing', liveClosing);
+        updateField('-live_weight_loss',    liveWeightLoss);
 
-        updateField("-live_opening_stock", liveOpening);
-        updateField("-live_purchase_stock", livePurchase);
-        updateField("-live_total_stock", liveTotal);
-        updateField("-live_todays_sales", liveSales);
-        updateField("-live_spoilage", liveSpoilage);
-        updateField("-live_actual_stock", liveActual);
-        updateField("-live_weight_closing", liveClosing);
-        updateField("-live_weight_loss", liveWeightLoss);
-
-        // Update visible text
-        const setText = (selector, val) => {
-            const el = row.querySelector(selector);
+        const setText = (cls, val) => {
+            const el = row.querySelector(cls);
             if (el) el.innerText = val.toFixed(3);
         };
-
-        setText('.total-display', totalStock);
-        setText('.actual-value', actual);
+        setText('.total-display',     totalStock);
+        setText('.actual-value',      actual);
         setText('.weight-loss-value', weightLoss);
+    }
+
+    function recalcCategoryStats(categoryId) {
+        const rows = document.querySelectorAll(`.item-row[data-category-id="${categoryId}"]`);
+
+        const livePurchaseEl = document.getElementById(`live-purchase-${categoryId}`);
+        const liveSalesEl    = document.getElementById(`live-sales-${categoryId}`);
+        if (!livePurchaseEl || !liveSalesEl) return;
+
+        const totalLivePurchase = parseFloat(livePurchaseEl.dataset.value || 0);
+        const totalLiveSales    = parseFloat(liveSalesEl.dataset.value    || 0);
+
+        let totalLiveClosing = 0;
+        rows.forEach(row => {
+            const multiplier   = parseFloat(row.dataset.multiplier || 1);
+            const closingInput = row.querySelector('input[name$="-closing_stock"]');
+            const closing      = closingInput ? parseFloat(closingInput.value || 0) : 0;
+            totalLiveClosing  += closing * multiplier;
+        });
+
+        const theoreticalLoss    = totalLivePurchase - totalLiveSales;
+        const theoreticalLossPct = totalLivePurchase > 0 ? (theoreticalLoss * 100 / totalLivePurchase) : 0;
+        const physClosePct       = totalLivePurchase > 0 ? (totalLiveClosing * 100 / totalLivePurchase) : 0;
+        const stockLoss          = theoreticalLoss - totalLiveClosing;
+        const stockLossPct       = totalLivePurchase > 0 ? (stockLoss * 100 / totalLivePurchase) : 0;
+
+        const setEl = (id, val, dec) => {
+            const el = document.getElementById(id);
+            if (el) el.innerText = val.toFixed(dec);
+        };
+
+        setEl(`theo-loss-${categoryId}`,      theoreticalLoss,    3);
+        setEl(`theo-loss-pct-${categoryId}`,  theoreticalLossPct, 2);
+        setEl(`phys-close-${categoryId}`,     totalLiveClosing,   3);
+        setEl(`phys-close-pct-${categoryId}`, physClosePct,       2);
+        setEl(`stock-loss-${categoryId}`,     stockLoss,          3);
+        setEl(`stock-loss-pct-${categoryId}`, stockLossPct,       2);
     }
 
     // Attach listeners
     document.querySelectorAll('input[name$="-spoilage"], input[name$="-closing_stock"]').forEach(input => {
-        input.addEventListener('input', function() {
+        input.addEventListener('input', function () {
             const row = this.closest('.item-row');
             if (row) {
-                console.log("Input changed:", this.name);
                 recalcRow(row);
+                const catId = row.dataset.categoryId;
+                if (catId) recalcCategoryStats(catId);
             }
         });
     });
 
-    // Run initial calculation
-    console.log("Running initial recalc for all rows");
+    // Initial pass
     document.querySelectorAll('.item-row').forEach(row => recalcRow(row));
+
+    const catIds = new Set(
+        [...document.querySelectorAll('.item-row[data-category-id]')]
+            .map(r => r.dataset.categoryId).filter(Boolean)
+    );
+    catIds.forEach(id => recalcCategoryStats(id));
 });
 </script>
 {% endblock %}

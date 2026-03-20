@@ -505,6 +505,67 @@ def daily_stock_update(request):
                 }
 
             initial_data.append(initial)
+    
+    # --- Category-wise live weight stats ---
+    category_live_stats = {}
+    
+    for category, items in category_items.items():
+        total_live_purchase = Decimal('0.000')
+        total_live_sales    = Decimal('0.000')
+        total_live_closing  = Decimal('0.000')
+    
+        for item in items:
+            yp = item.yieldpercentage_set.first()
+            multiplier = yp.multipler if yp else Decimal('1.000')
+    
+            purchase = get_purchase_stock(item, selected_date, branch)
+            sales    = get_todays_sales(item, selected_date, branch)
+    
+            # Use saved closing stock if it exists, else 0
+            rec = existing_map.get(item.id)
+            closing = rec.closing_stock if rec else Decimal('0.000')
+    
+            total_live_purchase += (purchase * multiplier).quantize(Decimal('0.001'))
+            total_live_sales    += (sales    * multiplier).quantize(Decimal('0.001'))
+            total_live_closing  += (closing  * multiplier).quantize(Decimal('0.001'))
+    
+        # Theoretical loss = Live Purchase - Live Sales
+        theoretical_loss = total_live_purchase - total_live_sales
+    
+        # Theoretical loss %
+        if total_live_purchase > 0:
+            theoretical_loss_pct = (theoretical_loss * 100 / total_live_purchase).quantize(Decimal('0.01'))
+        else:
+            theoretical_loss_pct = Decimal('0.00')
+    
+        # Physical loss weight = sum of live closing stock (closing × multiplier)
+        physical_loss_weight = total_live_closing
+    
+        # Physical loss weight %
+        if total_live_purchase > 0:
+            physical_loss_pct = (physical_loss_weight * 100 / total_live_purchase).quantize(Decimal('0.01'))
+        else:
+            physical_loss_pct = Decimal('0.00')
+    
+        # Stock loss = Theoretical loss - Physical loss weight
+        stock_loss = theoretical_loss - physical_loss_weight
+    
+        # Stock loss %
+        if total_live_purchase > 0:
+            stock_loss_pct = (stock_loss * 100 / total_live_purchase).quantize(Decimal('0.01'))
+        else:
+            stock_loss_pct = Decimal('0.00')
+    
+        category_live_stats[category.pk] = {
+            'total_live_purchase':   total_live_purchase,
+            'total_live_sales':      total_live_sales,
+            'theoretical_loss':      theoretical_loss,
+            'theoretical_loss_pct':  theoretical_loss_pct,
+            'physical_loss_weight':  physical_loss_weight,
+            'physical_loss_pct':     physical_loss_pct,
+            'stock_loss':            stock_loss,
+            'stock_loss_pct':        stock_loss_pct,
+        }
 
     # Formset
     DailyStockFormSet = modelformset_factory(
@@ -580,17 +641,23 @@ def daily_stock_update(request):
             logger.error(f"Formset invalid: {formset.errors}")
             messages.error(request, "Form validation failed. Check required fields.")
 
+    # Build category_data list: (category, stats_dict) — no custom template tag needed
+    category_data = []
+    for category in category_items.keys():
+        category_data.append((category, category_live_stats.get(category.pk, {})))
+
     # GET or invalid POST → render
     context = {
         'formset': formset,
         'category_items': category_items,
+        'category_data': category_data,
         'selected_date': selected_date,
         'branch': branch,
         'branches': Branch.objects.all(),
         'role': role,
         'debug_live_visible': True,
     }
-    return render(request, 'daily_stock_update.html', context)
+    return render(request, 'daily_stock_update.html', context)  # ← this line was missing
 
 
 # Helper functions remain the same
@@ -1716,6 +1783,13 @@ def purchase_add(request):
                 })
             with transaction.atomic():
                 purchase = form.save(commit=False)
+
+                print("===== PURCHASE DEBUG =====")
+                print("Invoice:", purchase.invoice_number)
+                print("Tax Amount:", purchase.tax_amount)
+                print("Grand Total:", purchase.grand_total)
+                print("==========================")
+
                 purchase.added_by = request.user
                 if not is_admin_like:
                     purchase.branch = request.user.branch
@@ -1725,14 +1799,32 @@ def purchase_add(request):
                         if detail.instance.pk:
                             detail.instance.delete()
                     elif detail.cleaned_data and not detail.cleaned_data.get('DELETE'):
+
+                        print("===== PURCHASE DETAIL DEBUG =====")
+                        print("Item:", detail.cleaned_data.get('item'))
+                        print("Purchase Price:", detail.cleaned_data.get('purchase_price'))
+                        print("Qty:", detail.cleaned_data.get('qty'))
+                        print("No Of Boxes:", detail.cleaned_data.get('no_of_boxes'))
+                        print("Gross Weight:", detail.cleaned_data.get('gross_weight'))
+                        print("Empty Weight:", detail.cleaned_data.get('empty_weight'))
+                        print("Net Weight:", detail.cleaned_data.get('net_weight'))
+                        print("Tax %:", detail.cleaned_data.get('tax_percentage'))
+                        print("Total Amount:", detail.cleaned_data.get('total_amount'))
+                        print("=================================")
+
                         detail_instance = detail.save(commit=False)
                         detail_instance.purchase = purchase
                         detail_instance.save()
                         item = detail.cleaned_data['item']
+                        print("Item:", item)
+                        print("Current stock:", item.stock)
                         if item.category.is_weight_based:
-                            item.stock += detail.cleaned_data['net_weight']
+                            print("Adding weight:", detail.cleaned_data['net_weight'])
+                            new_stock = item.stock + detail.cleaned_data['net_weight']
                         else:
-                            item.stock += detail.cleaned_data['qty']
+                            print("Adding qty:", detail.cleaned_data['qty'])
+                            new_stock = item.stock + detail.cleaned_data['qty']
+                        print("New stock:", new_stock)
                         item.save()
                 messages.success(request, f"Purchase {invoice_no} saved successfully!")
                 return redirect("purchase_add")
