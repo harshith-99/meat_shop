@@ -28,45 +28,96 @@
         </div>
     </form>
 
-    {% if category_items %}
-        <div class="table-responsive">
-            <table class="table table-bordered table-sm">
-                <thead class="table-light">
-                    <tr>
-                        <th>Item</th>
-                        <th>Opening Stock</th>
-                        <th>Purchase Stock</th>
-                        <th>Total Stock</th>
-                        <th>Today's Sales</th>
-                        <th>Spoilage</th>
-                        <th>Actual Stock</th>
-                        <th>Closing Stock</th>
-                        <th>Weight Loss</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for category, rows in category_items.items %}
-                        <tr class="table-secondary">
-                            <td colspan="9"><strong>{{ category.category_name }}</strong></td>
-                        </tr>
+    {% if category_data %}
 
-                        {% for r in rows %}
-                            <tr>
-                                <td>{{ r.item.name }} <small>({{ r.item.code }})</small></td>
-                                <td>{{ r.opening_stock|floatformat:3 }}</td>
-                                <td>{{ r.purchase_stock|floatformat:3 }}</td>
-                                <td>{{ r.total_stock|floatformat:3 }}</td>
-                                <td>{{ r.todays_sales|floatformat:3 }}</td>
-                                <td>{{ r.spoilage|floatformat:3 }}</td>
-                                <td>{{ r.actual_stock|floatformat:3 }}</td>
-                                <td>{{ r.closing_stock|floatformat:3 }}</td>
-                                <td>{{ r.weight_loss|floatformat:3 }}</td>
-                            </tr>
-                        {% endfor %}
-                    {% endfor %}
-                </tbody>
-            </table>
+        {% for category, rows, stats in category_data %}
+
+        <table class="table table-bordered table-sm">
+            <thead class="table-light">
+                <tr>
+                    <th>Item</th>
+                    <th>Opening</th>
+                    <th>Purchase</th>
+                    <th>Total</th>
+                    <th>Sales</th>
+                    <th>Spoilage</th>
+                    <th>Closing</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="table-secondary">
+                    <td colspan="7"><strong>{{ category.category_name }}</strong></td>
+                </tr>
+                {% for r in rows %}
+                {% if r.closing_stock > 0 or r.todays_sales > 0 %}
+                <tr>
+                    <td>
+                        <strong>{{ r.item.name }}</strong><br>
+                        <small>{{ r.item.code }}</small>
+                    </td>
+                    <td>{{ r.opening_stock|floatformat:3 }}</td>
+                    <td>{{ r.purchase_stock|floatformat:3 }}</td>
+                    <td>{{ r.total_stock|floatformat:3 }}</td>
+                    <td>{{ r.todays_sales|floatformat:3 }}</td>
+                    <td>{{ r.spoilage|floatformat:3 }}</td>
+                    <td>{{ r.closing_stock|floatformat:3 }}</td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {# ── Stats panel after each category table ── #}
+        <div class="mb-4 p-3 rounded"
+             style="background:#e9ecef; border: 1px solid #ced4da;">
+
+            <strong class="d-block mb-3">{{ category.category_name }} — Analysis</strong>
+
+            <div class="row g-2 text-center">
+
+                <div class="col">
+                    <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
+                        <div class="small text-muted mb-1">Live Purchase</div>
+                        <div class="fw-bold">{{ stats.total_live_purchase|floatformat:3 }} kg</div>
+                    </div>
+                </div>
+
+                <div class="col">
+                    <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
+                        <div class="small text-muted mb-1">Live Sales</div>
+                        <div class="fw-bold">{{ stats.total_live_sales|floatformat:3 }} kg</div>
+                    </div>
+                </div>
+
+                <div class="col">
+                    <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
+                        <div class="small text-muted mb-1">Theoretical Loss</div>
+                        <div class="fw-bold">{{ stats.theoretical_loss|floatformat:3 }} kg</div>
+                        <div class="small">{{ stats.theoretical_loss_pct|floatformat:2 }}%</div>
+                    </div>
+                </div>
+
+                <div class="col">
+                    <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
+                        <div class="small text-muted mb-1">Physical Closing</div>
+                        <div class="fw-bold">{{ stats.physical_loss_weight|floatformat:3 }} kg</div>
+                        <div class="small">{{ stats.physical_loss_pct|floatformat:2 }}%</div>
+                    </div>
+                </div>
+
+                <div class="col">
+                    <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
+                        <div class="small text-muted mb-1">Stock Loss</div>
+                        <div class="fw-bold">{{ stats.stock_loss|floatformat:3 }} kg</div>
+                        <div class="small">{{ stats.stock_loss_pct|floatformat:2 }}%</div>
+                    </div>
+                </div>
+
+            </div>
         </div>
+
+        {% endfor %}
+
     {% else %}
         <div class="alert alert-info mt-3">
             No stock update records found for the selected date and branch.

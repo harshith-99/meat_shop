@@ -110,20 +110,17 @@
             </table>
 
             {# ── Stats panel immediately after this category's table ── #}
-            <div class="category-stats-panel mb-4 p-3 rounded border"
+            <div class="category-stats-panel mb-4 p-3 rounded"
                  id="stats-cat-{{ category.pk }}"
-                 style="background:#f8f9fa; border-color:#dee2e6 !important;">
+                 style="background:#e9ecef; border: 1px solid #ced4da;">
 
-                <div class="d-flex align-items-center mb-2">
-                    <strong class="me-2"> {{ category.category_name }}</strong>
-                    <!-- <small class="text-muted">(Live = weight × multiplier)</small> -->
-                </div>
+                <strong class="d-block mb-3">{{ category.category_name }} — Analysis</strong>
 
                 <div class="row g-2 text-center">
 
-                    <div class="col-6 col-md-2">
-                        <div class="p-2 rounded bg-white border">
-                            <div class="small text-muted">Live Purchase</div>
+                    <div class="col">
+                        <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
+                            <div class="small text-muted mb-1">Live Purchase</div>
                             <div class="fw-bold"
                                  id="live-purchase-{{ category.pk }}"
                                  data-value="{{ stats.total_live_purchase|floatformat:3 }}">
@@ -132,9 +129,9 @@
                         </div>
                     </div>
 
-                    <div class="col-6 col-md-2">
-                        <div class="p-2 rounded bg-white border">
-                            <div class="small text-muted">Live Sales</div>
+                    <div class="col">
+                        <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
+                            <div class="small text-muted mb-1">Live Sales</div>
                             <div class="fw-bold"
                                  id="live-sales-{{ category.pk }}"
                                  data-value="{{ stats.total_live_sales|floatformat:3 }}">
@@ -143,56 +140,47 @@
                         </div>
                     </div>
 
-                    <div class="col-6 col-md-2">
-                        <div class="p-2 rounded bg-white border">
-                            <div class="small text-muted">Theoretical Loss</div>
-                            <div class="fw-bold"
-                                 id="theo-loss-{{ category.pk }}"
-                                 data-value="{{ stats.theoretical_loss|floatformat:3 }}">
-                                {{ stats.theoretical_loss|floatformat:3 }} kg
+                    <div class="col">
+                        <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
+                            <div class="small text-muted mb-1">Theoretical Loss</div>
+                            <div class="fw-bold">
+                                <span id="theo-loss-{{ category.pk }}"
+                                      data-value="{{ stats.theoretical_loss|floatformat:3 }}">{{ stats.theoretical_loss|floatformat:3 }}</span> kg
                             </div>
-                            <div class="small" id="theo-loss-pct-{{ category.pk }}">
-                                {{ stats.theoretical_loss_pct|floatformat:2 }} %
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-6 col-md-2">
-                        <div class="p-2 rounded bg-white border">
-                            <div class="small text-muted">Physical Closing</div>
-                            <div class="fw-bold"
-                                 id="phys-close-{{ category.pk }}"
-                                 data-value="{{ stats.physical_loss_weight|floatformat:3 }}">
-                                {{ stats.physical_loss_weight|floatformat:3 }} kg
-                            </div>
-                            <div class="small" id="phys-close-pct-{{ category.pk }}">
-                                {{ stats.physical_loss_pct|floatformat:2 }}%
+                            <div class="small">
+                                <span id="theo-loss-pct-{{ category.pk }}">{{ stats.theoretical_loss_pct|floatformat:2 }}</span>%
                             </div>
                         </div>
                     </div>
 
-                    <div class="col-6 col-md-2">
-                        <div class="p-2 rounded bg-white border"
+                    <div class="col">
+                        <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
+                            <div class="small text-muted mb-1">Physical Closing</div>
+                            <div class="fw-bold">
+                                <span id="phys-close-{{ category.pk }}"
+                                      data-value="{{ stats.physical_loss_weight|floatformat:3 }}">{{ stats.physical_loss_weight|floatformat:3 }}</span> kg
+                            </div>
+                            <div class="small">
+                                <span id="phys-close-pct-{{ category.pk }}">{{ stats.physical_loss_pct|floatformat:2 }}</span>%
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col">
+                        <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center"
                              id="stock-loss-card-{{ category.pk }}">
-                            <div class="small text-muted">Stock Loss</div>
-                            <div class="fw-bold"
-                                 id="stock-loss-{{ category.pk }}"
-                                 data-value="{{ stats.stock_loss|floatformat:3 }}">
-                                {{ stats.stock_loss|floatformat:3 }} kg
+                            <div class="small text-muted mb-1">Stock Loss</div>
+                            <div class="fw-bold">
+                                <span id="stock-loss-{{ category.pk }}"
+                                      data-value="{{ stats.stock_loss|floatformat:3 }}">{{ stats.stock_loss|floatformat:3 }}</span> kg
                             </div>
-                            <div class="small" id="stock-loss-pct-{{ category.pk }}">
-                                {{ stats.stock_loss_pct|floatformat:2 }}%
+                            <div class="small">
+                                <span id="stock-loss-pct-{{ category.pk }}">{{ stats.stock_loss_pct|floatformat:2 }}</span>%
                             </div>
                         </div>
                     </div>
 
                 </div>
-
-                <!-- <div class="mt-2 small text-muted">
-                    <span class="me-3">📐 <em>Theoretical Loss = Live Purchase − Live Sales</em></span>
-                    <span class="me-3">📦 <em>Physical Closing = Σ (Closing × Multiplier)</em></span>
-                    <span>🔴 <em>Stock Loss = Theoretical Loss − Physical Closing</em></span>
-                </div> -->
             </div>
 
             {% endfor %}
@@ -283,17 +271,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const stockLoss          = theoreticalLoss - totalLiveClosing;
         const stockLossPct       = totalLivePurchase > 0 ? (stockLoss * 100 / totalLivePurchase) : 0;
 
-        const setEl = (id, val, dec) => {
+        // Update only the <span> inside the card — the " kg" and "%" text nodes stay untouched
+        const setSpan = (id, val, dec) => {
             const el = document.getElementById(id);
             if (el) el.innerText = val.toFixed(dec);
         };
 
-        setEl(`theo-loss-${categoryId}`,      theoreticalLoss,    3);
-        setEl(`theo-loss-pct-${categoryId}`,  theoreticalLossPct, 2);
-        setEl(`phys-close-${categoryId}`,     totalLiveClosing,   3);
-        setEl(`phys-close-pct-${categoryId}`, physClosePct,       2);
-        setEl(`stock-loss-${categoryId}`,     stockLoss,          3);
-        setEl(`stock-loss-pct-${categoryId}`, stockLossPct,       2);
+        setSpan(`theo-loss-${categoryId}`,      theoreticalLoss,    3);
+        setSpan(`theo-loss-pct-${categoryId}`,  theoreticalLossPct, 2);
+        setSpan(`phys-close-${categoryId}`,     totalLiveClosing,   3);
+        setSpan(`phys-close-pct-${categoryId}`, physClosePct,       2);
+        setSpan(`stock-loss-${categoryId}`,     stockLoss,          3);
+        setSpan(`stock-loss-pct-${categoryId}`, stockLossPct,       2);
     }
 
     // Attach listeners

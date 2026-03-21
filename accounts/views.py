@@ -40,6 +40,192 @@ logo_path = os.path.join(
     'jaan_logo.jpeg'
 )
 
+@login_required(login_url='login')
+def wholesale_profit_report(request):
+    is_admin_like = request.user.role in ['super_admin', 'admin']
+
+    branch_id     = request.GET.get('branch')
+    customer_id   = request.GET.get('customer')
+    from_date_str = request.GET.get('from_date')
+    to_date_str   = request.GET.get('to_date')
+
+    today     = date.today()
+    from_date = from_date_str or today.strftime('%Y-%m-%d')
+    to_date   = to_date_str   or today.strftime('%Y-%m-%d')
+
+    try:
+        from_date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+    except ValueError:
+        from_date_obj = today
+        from_date = today.strftime('%Y-%m-%d')
+
+    try:
+        to_date_obj = datetime.strptime(to_date, '%Y-%m-%d').date()
+    except ValueError:
+        to_date_obj = today
+        to_date = today.strftime('%Y-%m-%d')
+
+    # ── Determine branch scope ─────────────────────────────────────────────
+    selected_branch   = None
+    selected_customer = None
+
+    if is_admin_like:
+        if branch_id and branch_id.isdigit():
+            selected_branch = Branch.objects.filter(branch_id=branch_id).first()
+    else:
+        selected_branch = request.user.branch if request.user.branch else None
+
+    if customer_id:
+        selected_customer = Customer.objects.filter(id=customer_id).first()
+
+    # ── Pre-build live purchase price lookup ───────────────────────────────
+    # Structure: live_price_map[(category_id, purchase_date, branch_id)] = price_per_kg
+    #
+    # For each purchase detail where item.is_live=True:
+    #   price_per_kg = total_amount / net_weight   (actual cost per kg of live bird)
+    #   keyed by (category_id, purchase_date, branch_id)
+
+    purchase_qs = PurchaseDetail.objects.filter(
+        item__is_live=True,
+        purchase__purchase_date__gte=from_date_obj,
+        purchase__purchase_date__lte=to_date_obj,
+        purchase__delete_status=False,
+    ).select_related('item__category', 'purchase__branch')
+
+    if selected_branch:
+        purchase_qs = purchase_qs.filter(purchase__branch=selected_branch)
+
+    # If multiple purchases of the live item on the same day (edge case),
+    # aggregate total cost and total weight → weighted average price
+    live_price_raw = {}  # (category_id, date, branch_id) → {cost, weight}
+
+    for pd in purchase_qs:
+        key = (
+            pd.item.category_id,
+            pd.purchase.purchase_date,
+            pd.purchase.branch_id,
+        )
+        if key not in live_price_raw:
+            live_price_raw[key] = {'cost': Decimal('0.000'), 'weight': Decimal('0.000')}
+        live_price_raw[key]['cost']   += pd.total_amount or Decimal('0.000')
+        live_price_raw[key]['weight'] += pd.net_weight   or Decimal('0.000')
+
+    live_price_map = {}
+    for key, val in live_price_raw.items():
+        if val['weight'] > 0:
+            live_price_map[key] = (val['cost'] / val['weight']).quantize(Decimal('0.001'))
+        else:
+            live_price_map[key] = Decimal('0.000')
+
+    # ── Sales details queryset ─────────────────────────────────────────────
+    details_qs = WholesaleSalesDetails.objects.filter(
+        sales__delete_status=False,
+        sales__sales_date__gte=from_date_obj,
+        sales__sales_date__lte=to_date_obj,
+    ).select_related(
+        'sales__customer', 'sales__branch',
+        'item', 'item__category'
+    )
+
+    if selected_branch:
+        details_qs = details_qs.filter(sales__branch=selected_branch)
+    elif not is_admin_like:
+        details_qs = details_qs.none()
+
+    if selected_customer:
+        details_qs = details_qs.filter(sales__customer=selected_customer)
+
+    # ── Build report ───────────────────────────────────────────────────────
+    report_data = {}
+
+    for detail in details_qs:
+        customer      = detail.sales.customer
+        customer_name = customer.customer_name or "Unknown Customer"
+        item          = detail.item
+        category      = item.category
+        sales_date    = detail.sales.sales_date
+        branch        = detail.sales.branch
+
+        # Multiplier for this item
+        yp         = item.yieldpercentage_set.first()
+        multiplier = yp.multipler if yp else Decimal('1.000')
+
+        # Live converted weight = net_weight × multiplier
+        net_weight  = detail.net_weight or Decimal('0.000')
+        live_weight = (net_weight * multiplier).quantize(Decimal('0.001'))
+
+        # Live purchase price for this category on this date at this branch
+        price_key      = (category.pk, sales_date, branch.pk)
+        live_price     = live_price_map.get(price_key, Decimal('0.000'))
+
+        # Purchase amount = live_weight × live_price_per_kg
+        purchase_amount = (live_weight * live_price).quantize(Decimal('0.01'))
+
+        # Sales amount
+        sales_amount = detail.total_amount or Decimal('0.00')
+
+        # Profit for this row
+        profit = (sales_amount - purchase_amount).quantize(Decimal('0.01'))
+
+        # ── Aggregate ──
+        if customer_name not in report_data:
+            report_data[customer_name] = {
+                'customer':       customer,
+                'items':          {},
+                'total_sales':    Decimal('0.00'),
+                'total_purchase': Decimal('0.00'),
+            }
+
+        item_key = item.code
+        if item_key not in report_data[customer_name]['items']:
+            report_data[customer_name]['items'][item_key] = {
+                'code':              item.code,
+                'name':              item.name,
+                'total_qty':         0,
+                'total_net_weight':  Decimal('0.000'),
+                'total_live_weight': Decimal('0.000'),
+                'total_sales':       Decimal('0.00'),
+                'total_purchase':    Decimal('0.00'),
+                'total_profit':      Decimal('0.00'),
+            }
+
+        row = report_data[customer_name]['items'][item_key]
+        row['total_qty']          += detail.qty or 0
+        row['total_net_weight']   += net_weight
+        row['total_live_weight']  += live_weight
+        row['total_sales']        += sales_amount
+        row['total_purchase']     += purchase_amount
+        row['total_profit']       += profit
+
+        report_data[customer_name]['total_sales']    += sales_amount
+        report_data[customer_name]['total_purchase'] += purchase_amount
+
+    # ── Per-customer profit summary ────────────────────────────────────────
+    for cname, data in report_data.items():
+        ts = data['total_sales']
+        tp = data['total_purchase']
+        data['total_profit'] = ts - tp
+        data['profit_pct']   = (
+            ((ts - tp) * 100 / ts).quantize(Decimal('0.01'))
+            if ts > 0 else Decimal('0.00')
+        )
+
+    sorted_report = dict(sorted(report_data.items()))
+
+    context = {
+        'report_data':       sorted_report,
+        'is_admin_like':     is_admin_like,
+        'branches':          Branch.objects.all() if is_admin_like else [],
+        'selected_branch':   selected_branch,
+        'customers':         Customer.objects.filter(whole_sale=True, delete_status=False),
+        'selected_customer': selected_customer,
+        'from_date':         from_date,
+        'to_date':           to_date,
+        'today':             today.strftime('%Y-%m-%d'),
+    }
+
+    return render(request, 'wholesale_profit_report.html', context)
+
 @login_required
 def PettyCashBalance_add(request):
     if request.method =="POST":
@@ -326,21 +512,18 @@ def daily_stock_report(request):
     role = user.role
     today = timezone.now().date()
 
-    # Date selection
     selected_date_str = request.GET.get('date', today.isoformat())
     try:
         selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
     except ValueError:
         selected_date = today
 
-    # Branch selection
     if role in ['admin', 'super_admin']:
         branch_id = request.GET.get('branch')
         branch = get_object_or_404(Branch, pk=branch_id) if branch_id else user.branch
     else:
         branch = user.branch
 
-    # Fetch records
     records = (
         DailystockUpdate.objects
         .filter(date=selected_date, branch=branch)
@@ -348,50 +531,50 @@ def daily_stock_report(request):
         .order_by('item__category__category_id', 'item__code')
     )
 
-    # Group by category + calculate simple totals
-    from collections import OrderedDict
-    from decimal import Decimal
-
     category_items = OrderedDict()
-    category_summary = {}
-
     for r in records:
-        category = r.item.category
-        category_items.setdefault(category, []).append(r)
+        category_items.setdefault(r.item.category, []).append(r)
 
+    # Build category_data with live stats — same logic as daily_stock_update
+    category_data = []
     for category, rows in category_items.items():
-        summary = {
-            'opening': Decimal('0'),
-            'purchase': Decimal('0'),
-            'total_stock': Decimal('0'),
-            'sales': Decimal('0'),
-            'spoilage': Decimal('0'),
-            'actual_stock': Decimal('0'),
-            'closing_stock': Decimal('0'),
-            'weight_loss': Decimal('0'),
-        }
+        total_live_purchase = Decimal('0.000')
+        total_live_sales    = Decimal('0.000')
+        total_live_closing  = Decimal('0.000')
 
         for r in rows:
-            summary['opening'] += r.opening_stock
-            summary['purchase'] += r.purchase_stock
-            summary['total_stock'] += r.total_stock
-            summary['sales'] += r.todays_sales
-            summary['spoilage'] += r.spoilage
-            summary['actual_stock'] += r.actual_stock
-            summary['closing_stock'] += r.closing_stock
-            summary['weight_loss'] += r.weight_loss
+            yp = r.item.yieldpercentage_set.first()
+            multiplier = yp.multipler if yp else Decimal('1.000')
 
-        category_summary[category.pk] = summary
+            total_live_purchase += (r.purchase_stock * multiplier).quantize(Decimal('0.001'))
+            total_live_sales    += (r.todays_sales   * multiplier).quantize(Decimal('0.001'))
+            total_live_closing  += (r.closing_stock  * multiplier).quantize(Decimal('0.001'))
+
+        theoretical_loss     = total_live_purchase - total_live_sales
+        theoretical_loss_pct = (theoretical_loss * 100 / total_live_purchase).quantize(Decimal('0.01')) if total_live_purchase > 0 else Decimal('0.00')
+        physical_loss_weight = total_live_closing
+        physical_loss_pct    = (physical_loss_weight * 100 / total_live_purchase).quantize(Decimal('0.01')) if total_live_purchase > 0 else Decimal('0.00')
+        stock_loss           = theoretical_loss - physical_loss_weight
+        stock_loss_pct       = (stock_loss * 100 / total_live_purchase).quantize(Decimal('0.01')) if total_live_purchase > 0 else Decimal('0.00')
+
+        category_data.append((category, rows, {
+            'total_live_purchase':  total_live_purchase,
+            'total_live_sales':     total_live_sales,
+            'theoretical_loss':     theoretical_loss,
+            'theoretical_loss_pct': theoretical_loss_pct,
+            'physical_loss_weight': physical_loss_weight,
+            'physical_loss_pct':    physical_loss_pct,
+            'stock_loss':           stock_loss,
+            'stock_loss_pct':       stock_loss_pct,
+        }))
 
     context = {
-        'category_items': category_items,
-        'category_summary': category_summary,
+        'category_data': category_data,
         'selected_date': selected_date,
         'branch': branch,
         'branches': Branch.objects.all(),
         'role': role,
     }
-
     return render(request, 'daily_stock_report.html', context)
 
 
@@ -577,7 +760,7 @@ def daily_stock_update(request):
 
     formset = DailyStockFormSet(
         request.POST or None,
-        queryset=existing,
+        queryset=DailystockUpdate.objects.none(),  # ← empty queryset, initial drives everything
         initial=initial_data
     )
 
@@ -590,50 +773,77 @@ def daily_stock_update(request):
             saved_count = 0
 
             for form in formset:
-                # Only save if spoilage or closing_stock changed
-                if 'spoilage' in form.changed_data or 'closing_stock' in form.changed_data:
-                    instance = form.save(commit=False)
+                if not form.cleaned_data:
+                    continue
 
-                    # Set ALL fields from initial/calculated (since readonly fields not posted)
-                    instance.opening_stock = Decimal(form.initial['opening_stock'])
-                    instance.live_opening_stock = Decimal(form.initial['live_opening_stock'])
-                    instance.purchase_stock = Decimal(form.initial['purchase_stock'])
-                    instance.live_purchase_stock = Decimal(form.initial['live_purchase_stock'])
-                    instance.total_stock = Decimal(form.initial['total_stock'])
-                    instance.live_total_stock = Decimal(form.initial['live_total_stock'])
-                    instance.todays_sales = Decimal(form.initial['todays_sales'])
-                    instance.live_todays_sales = Decimal(form.initial['live_todays_sales'])
+                item_id = form.initial.get('item')
+                if not item_id:
+                    continue
 
-                    # Set required fields
-                    item_id = form.initial.get('item')
-                    if item_id:
-                        instance.item = Item.objects.get(id=item_id)
+                spoilage     = form.cleaned_data.get('spoilage')
+                closing_stock = form.cleaned_data.get('closing_stock')
 
-                    instance.date = selected_date
-                    instance.branch = branch
-                    instance.updated_by = user
+                # Skip rows where both editable fields are empty/None
+                if spoilage is None and closing_stock is None:
+                    continue
 
-                    # Calculations (using the posted/editable + initial)
-                    multiplier = Decimal(form.initial.get('multiplier', '1.000'))
+                spoilage      = spoilage      or Decimal('0.000')
+                closing_stock = closing_stock or Decimal('0.000')
 
-                    instance.live_spoilage = (instance.spoilage * multiplier).quantize(Decimal('0.000'))
+                item       = Item.objects.get(id=item_id)
+                multiplier = Decimal(form.initial.get('multiplier', '1.000'))
 
-                    actual = (instance.opening_stock + instance.purchase_stock - instance.todays_sales) - instance.spoilage
-                    instance.actual_stock = actual.quantize(Decimal('0.000'))
-                    instance.live_actual_stock = (actual * multiplier).quantize(Decimal('0.000'))
+                opening_stock    = Decimal(form.initial['opening_stock'])
+                purchase_stock   = Decimal(form.initial['purchase_stock'])
+                todays_sales     = Decimal(form.initial['todays_sales'])
+                total_stock      = opening_stock + purchase_stock
 
-                    instance.live_weight_closing = (instance.closing_stock * multiplier).quantize(Decimal('0.000'))
-                    instance.weight_loss = (instance.actual_stock - instance.closing_stock).quantize(Decimal('0.000'))
-                    instance.live_weight_loss = (instance.live_actual_stock - instance.live_weight_closing).quantize(Decimal('0.000'))
+                live_opening_stock  = (opening_stock  * multiplier).quantize(Decimal('0.000'))
+                live_purchase_stock = (purchase_stock * multiplier).quantize(Decimal('0.000'))
+                live_total_stock    = live_opening_stock + live_purchase_stock
+                live_todays_sales   = (todays_sales   * multiplier).quantize(Decimal('0.000'))
+                live_spoilage       = (spoilage       * multiplier).quantize(Decimal('0.000'))
 
-                    instance.save()
-                    saved_count += 1
-                    logger.info(f"Saved changed row for item {instance.item_id}")
+                actual              = (opening_stock + purchase_stock - todays_sales) - spoilage
+                actual_stock        = actual.quantize(Decimal('0.000'))
+                live_actual_stock   = (actual * multiplier).quantize(Decimal('0.000'))
+
+                live_weight_closing = (closing_stock * multiplier).quantize(Decimal('0.000'))
+                weight_loss         = (actual_stock - closing_stock).quantize(Decimal('0.000'))
+                live_weight_loss    = (live_actual_stock - live_weight_closing).quantize(Decimal('0.000'))
+
+                obj, created = DailystockUpdate.objects.update_or_create(
+                    item=item,
+                    date=selected_date,
+                    branch=branch,
+                    defaults={
+                        'opening_stock':      opening_stock,
+                        'live_opening_stock': live_opening_stock,
+                        'purchase_stock':     purchase_stock,
+                        'live_purchase_stock':live_purchase_stock,
+                        'total_stock':        total_stock,
+                        'live_total_stock':   live_total_stock,
+                        'todays_sales':       todays_sales,
+                        'live_todays_sales':  live_todays_sales,
+                        'spoilage':           spoilage,
+                        'live_spoilage':      live_spoilage,
+                        'actual_stock':       actual_stock,
+                        'live_actual_stock':  live_actual_stock,
+                        'closing_stock':      closing_stock,
+                        'live_weight_closing':live_weight_closing,
+                        'weight_loss':        weight_loss,
+                        'live_weight_loss':   live_weight_loss,
+                        'updated_by':         user,
+                    }
+                )
+                saved_count += 1
+                action = "Created" if created else "Updated"
+                logger.info(f"{action} record for item {item.id} on {selected_date}")
 
             if saved_count > 0:
-                messages.success(request, f"Saved/updated {saved_count} changed records!")
+                messages.success(request, f"Saved/updated {saved_count} records!")
             else:
-                messages.info(request, "No changes detected in spoilage or closing stock.")
+                messages.info(request, "No changes detected.")
 
             return redirect(request.get_full_path())
 

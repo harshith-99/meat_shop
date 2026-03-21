@@ -55,10 +55,9 @@ class DailyStockUpdateForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Make all fields except editable ones NOT required
+        # Make ALL fields not required — we handle saving manually in the view
         for field_name in self.fields:
-            if field_name not in ['spoilage', 'closing_stock']:
-                self.fields[field_name].required = False
+            self.fields[field_name].required = False
 
 class YieldPercentageForm(forms.ModelForm):
     item = forms.ModelChoiceField(

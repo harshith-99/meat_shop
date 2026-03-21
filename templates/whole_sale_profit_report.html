@@ -1,0 +1,209 @@
+{% load static %}
+{% include "sidebar/sidebar.html" %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">Wholesale Profit Report</h1>
+
+    <!-- Filters -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 bg-success text-white">
+            <h6 class="m-0 font-weight-bold">Filter Report</h6>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">From Date</label>
+                    <input type="date" name="from_date" class="form-control" value="{{ from_date }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">To Date</label>
+                    <input type="date" name="to_date" class="form-control" value="{{ to_date }}">
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Customer</label>
+                    <select name="customer" class="form-control">
+                        <option value="">-- All Customers --</option>
+                        {% for c in customers %}
+                        <option value="{{ c.id }}" {% if selected_customer.id == c.id %}selected{% endif %}>
+                            {{ c.customer_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                {% if is_admin_like %}
+                <div class="col-md-3">
+                    <label class="form-label">Branch</label>
+                    <select name="branch" class="form-control">
+                        <option value="">-- All Branches --</option>
+                        {% for b in branches %}
+                        <option value="{{ b.branch_id }}"
+                            {% if selected_branch.branch_id == b.branch_id %}selected{% endif %}>
+                            {{ b.branch_name }} ({{ b.alias }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% else %}
+                {% if selected_branch %}
+                <div class="col-md-3">
+                    <label class="form-label">Your Branch</label>
+                    <input type="text" class="form-control"
+                           value="{{ selected_branch.branch_name }} ({{ selected_branch.alias }})" readonly>
+                    <small class="text-muted">You can only view your branch data</small>
+                </div>
+                {% endif %}
+                {% endif %}
+
+                <div class="col-md-4 align-self-end" style="margin-top:13px;">
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-filter"></i> Apply Filter
+                    </button>
+                    &nbsp;
+                    <a href="{% url 'wholesale_profit_report' %}" class="btn btn-secondary">Clear</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Info bar -->
+    <div class="alert alert-info">
+        Showing wholesale profit from <strong>{{ from_date }}</strong> to <strong>{{ to_date }}</strong>
+        {% if selected_branch %}
+            for <strong>{{ selected_branch.branch_name }}</strong>
+        {% elif is_admin_like %}
+            <strong>(All Branches)</strong>
+        {% endif %}
+        &nbsp;|&nbsp; Total Customers: <strong>{{ report_data|length }}</strong>
+    </div>
+
+    <!-- Report -->
+    {% for customer_name, data in report_data.items %}
+    <div class="card shadow mb-4">
+
+        <div class="card-header py-3 bg-success text-white">
+            <h6 class="m-0 font-weight-bold">
+                {{ customer_name }}
+                {% if data.customer.customer_phone %} — {{ data.customer.customer_phone }}{% endif %}
+            </h6>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Code</th>
+                            <th>Item</th>
+                            <th>Qty</th>
+                            <th>Net Weight (kg)</th>
+                            <th>Live Weight (kg)</th>
+                            <th>Purchase Price (₹/kg)</th>
+                            <th>Purchase Amt (₹)</th>
+                            <th>Sales Amt (₹)</th>
+                            <th>Profit (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item_code, item in data.items.items %}
+                        <tr>
+                            <td><strong>{{ item.code }}</strong></td>
+                            <td>{{ item.name }}</td>
+                            <td>{{ item.total_qty }}</td>
+                            <td>{{ item.total_net_weight|floatformat:3 }}</td>
+                            <td>{{ item.total_live_weight|floatformat:3 }}</td>
+                            <td>₹{{ item.avg_purchase_price|floatformat:2 }}</td>
+                            <td>₹{{ item.total_purchase|floatformat:2|intcomma }}</td>
+                            <td>₹{{ item.total_sales|floatformat:2|intcomma }}</td>
+                            <td>
+                                {% if item.total_profit >= 0 %}
+                                    ₹{{ item.total_profit|floatformat:2|intcomma }}
+                                {% else %}
+                                    <span class="text-danger">-₹{{ item.total_profit|floatformat:2|intcomma }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted">No items found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+
+                    {# ── Customer totals row ── #}
+                    <tfoot class="table-secondary fw-bold">
+                        <tr>
+                            <td colspan="6" class="text-end">Customer Total</td>
+                            <td>₹{{ data.total_purchase|floatformat:2|intcomma }}</td>
+                            <td>₹{{ data.total_sales|floatformat:2|intcomma }}</td>
+                            <td>
+                                {% if data.total_profit >= 0 %}
+                                    ₹{{ data.total_profit|floatformat:2|intcomma }}
+                                {% else %}
+                                    <span class="text-danger">-₹{{ data.total_profit|floatformat:2|intcomma }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        {# ── Profit % summary panel ── #}
+        <div class="card-footer py-2" style="background:#e9ecef; border-top: 1px solid #ced4da;">
+            <div class="row g-2 text-center">
+
+                <div class="col">
+                    <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
+                        <div class="small text-muted mb-1">Total Sales</div>
+                        <div class="fw-bold">₹{{ data.total_sales|floatformat:2|intcomma }}</div>
+                    </div>
+                </div>
+
+                <div class="col">
+                    <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
+                        <div class="small text-muted mb-1">Total Purchase Cost</div>
+                        <div class="fw-bold">₹{{ data.total_purchase|floatformat:2|intcomma }}</div>
+                    </div>
+                </div>
+
+                <div class="col">
+                    <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
+                        <div class="small text-muted mb-1">Total Profit</div>
+                        <div class="fw-bold">
+                            {% if data.total_profit >= 0 %}
+                                ₹{{ data.total_profit|floatformat:2|intcomma }}
+                            {% else %}
+                                <span class="text-danger">-₹{{ data.total_profit|floatformat:2|intcomma }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col">
+                    <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
+                        <div class="small text-muted mb-1">Profit %</div>
+                        <div class="fw-bold">
+                            {{ data.profit_pct|floatformat:2 }}%
+                        </div>
+                        <div class="small text-muted">
+                            = ({{ data.total_profit|floatformat:2 }} × 100) ÷ {{ data.total_sales|floatformat:2 }}
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+    {% empty %}
+    <div class="alert alert-warning text-center">
+        No wholesale sales found for the selected period.
+    </div>
+    {% endfor %}
+
+</div>
+{% endblock %}
