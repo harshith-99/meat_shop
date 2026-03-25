@@ -1,0 +1,187 @@
+{% load static %}
+{% include "sidebar/sidebar.html" %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">Item-Wise Profit Report</h1>
+
+    <!-- Filters -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 bg-success text-white">
+            <h6 class="m-0 font-weight-bold">Filter Report</h6>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">From Date</label>
+                    <input type="date" name="from_date" class="form-control" value="{{ from_date }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">To Date</label>
+                    <input type="date" name="to_date" class="form-control" value="{{ to_date }}">
+                </div>
+
+                {% if is_admin_like %}
+                <div class="col-md-3">
+                    <label class="form-label">Branch</label>
+                    <select name="branch" class="form-control">
+                        <option value="">-- All Branches --</option>
+                        {% for b in branches %}
+                        <option value="{{ b.branch_id }}"
+                            {% if selected_branch.branch_id == b.branch_id %}selected{% endif %}>
+                            {{ b.branch_name }} ({{ b.alias }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% else %}
+                {% if selected_branch %}
+                <div class="col-md-3">
+                    <label class="form-label">Your Branch</label>
+                    <input type="text" class="form-control"
+                           value="{{ selected_branch.branch_name }} ({{ selected_branch.alias }})" readonly>
+                    <small class="text-muted">You can only view your branch data</small>
+                </div>
+                {% endif %}
+                {% endif %}
+
+                <div class="col-md-3 align-self-end">
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-filter"></i> Apply Filter
+                    </button>
+                    &nbsp;
+                    <a href="{% url 'item_wise_profit_report' %}" class="btn btn-secondary">Clear</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Info bar -->
+    <div class="alert alert-info">
+        Showing item-wise profit from <strong>{{ from_date }}</strong> to <strong>{{ to_date }}</strong>
+        {% if selected_branch %}
+            for <strong>{{ selected_branch.branch_name }}</strong>
+        {% elif is_admin_like %}
+            <strong>(All Branches)</strong>
+        {% endif %}
+        &nbsp;|&nbsp; Total Items: <strong>{{ report_items|length }}</strong>
+        &nbsp;|&nbsp; Includes: <strong>Retail + Wholesale</strong>
+    </div>
+
+    {% if report_items %}
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 bg-success text-white">
+            <h6 class="m-0 font-weight-bold">
+                Item-Wise Sales &amp; Profit &nbsp;({{ from_date }} to {{ to_date }})
+            </h6>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Product</th>
+                            <th class="text-end">Qty (kg)</th>
+                            <th class="text-end">Live Wt (kg)</th>
+                            <th class="text-end">Sales Value (₹)</th>
+                            <th class="text-end">Cost Value (₹)</th>
+                            <th class="text-end">Profit (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item_code, item in report_items.items %}
+                        <tr>
+                            <td>
+                                <strong>{{ item.name }}</strong>
+                                <small class="text-muted ms-1">({{ item.code }})</small>
+                            </td>
+                            <td class="text-end">{{ item.total_qty|floatformat:3 }}</td>
+                            <td class="text-end">{{ item.total_live_weight|floatformat:3 }}</td>
+                            <td class="text-end">{{ item.total_sales|floatformat:2|intcomma }}</td>
+                            <td class="text-end">{{ item.total_purchase|floatformat:2|intcomma }}</td>
+                            <td class="text-end">
+                                {% if item.total_profit >= 0 %}
+                                    {{ item.total_profit|floatformat:2|intcomma }}
+                                {% else %}
+                                    <span class="text-danger">({{ item.total_profit|floatformat:2|intcomma }})</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+
+                    <tfoot class="table-secondary fw-bold">
+                        <tr>
+                            <td colspan="3" class="text-end">Grand Total</td>
+                            <td class="text-end">{{ grand_sales|floatformat:2|intcomma }}</td>
+                            <td class="text-end">{{ grand_purchase|floatformat:2|intcomma }}</td>
+                            <td class="text-end">
+                                {% if grand_profit >= 0 %}
+                                    {{ grand_profit|floatformat:2|intcomma }}
+                                {% else %}
+                                    <span class="text-danger">({{ grand_profit|floatformat:2|intcomma }})</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- Summary Stats Panel -->
+        <div class="card-footer py-3" style="background:#e9ecef; border-top:1px solid #ced4da;">
+            <div class="row g-2 text-center">
+                {% if role == 'super_admin' %}
+                <div class="col">
+                    <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
+                        <div class="small text-muted mb-1">Total Sales</div>
+                        <div class="fw-bold">₹{{ grand_sales|floatformat:2|intcomma }}</div>
+                    </div>
+                </div>
+                 {% endif %}
+                
+                 {% if role == 'super_admin' %}
+                <div class="col">
+                    <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
+                        <div class="small text-muted mb-1">Total Purchase Cost</div>
+                        <div class="fw-bold">₹{{ grand_purchase|floatformat:2|intcomma }}</div>
+                    </div>
+                </div>
+                {% endif %}
+                <div class="col">
+                    <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
+                        <div class="small text-muted mb-1">Total Profit</div>
+                        <div class="fw-bold">
+                            {% if grand_profit >= 0 %}
+                                ₹{{ grand_profit|floatformat:2|intcomma }}
+                            {% else %}
+                                <span class="text-danger">-₹{{ grand_profit|floatformat:2|intcomma }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col">
+                    <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
+                        <div class="small text-muted mb-1">Profit %</div>
+                        <div class="fw-bold">{{ profit_pct|floatformat:2 }}%</div>
+                    </div>
+                </div>
+                
+
+            </div>
+        </div>
+
+    </div>
+
+    {% else %}
+    <div class="alert alert-warning text-center">
+        No sales data found for the selected period.
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

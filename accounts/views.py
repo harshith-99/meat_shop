@@ -41,6 +41,170 @@ logo_path = os.path.join(
 )
 
 @login_required(login_url='login')
+def item_wise_profit_report(request):
+    is_admin_like = request.user.role in ['super_admin', 'admin']
+
+    branch_id     = request.GET.get('branch')
+    from_date_str = request.GET.get('from_date')
+    to_date_str   = request.GET.get('to_date')
+
+    today     = date.today()
+    from_date = from_date_str or today.strftime('%Y-%m-%d')
+    to_date   = to_date_str   or today.strftime('%Y-%m-%d')
+
+    try:
+        from_date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+    except ValueError:
+        from_date_obj = today
+        from_date = today.strftime('%Y-%m-%d')
+
+    try:
+        to_date_obj = datetime.strptime(to_date, '%Y-%m-%d').date()
+    except ValueError:
+        to_date_obj = today
+        to_date = today.strftime('%Y-%m-%d')
+
+    # ── Branch scope ───────────────────────────────────────────────────────
+    selected_branch = None
+    if is_admin_like:
+        if branch_id and branch_id.isdigit():
+            selected_branch = Branch.objects.filter(branch_id=branch_id).first()
+    else:
+        selected_branch = request.user.branch if request.user.branch else None
+
+    # ── Pre-build live purchase price lookup ───────────────────────────────
+    # Key: (category_id, purchase_date, branch_id) → price_per_kg
+    # This means each day gets its own price, so multi-day ranges are handled
+    # correctly — Day 1 sales use Day 1 price, Day 2 sales use Day 2 price, etc.
+    purchase_qs = PurchaseDetail.objects.filter(
+        item__is_live=True,
+        purchase__purchase_date__gte=from_date_obj,
+        purchase__purchase_date__lte=to_date_obj,
+        purchase__delete_status=False,
+    ).select_related('item__category', 'purchase__branch')
+
+    if selected_branch:
+        purchase_qs = purchase_qs.filter(purchase__branch=selected_branch)
+
+    live_price_raw = {}
+    for pd in purchase_qs:
+        key = (pd.item.category_id, pd.purchase.purchase_date, pd.purchase.branch_id)
+        if key not in live_price_raw:
+            live_price_raw[key] = {'cost': Decimal('0.000'), 'weight': Decimal('0.000')}
+        live_price_raw[key]['cost']   += pd.total_amount or Decimal('0.000')
+        live_price_raw[key]['weight'] += pd.net_weight   or Decimal('0.000')
+
+    live_price_map = {}
+    for key, val in live_price_raw.items():
+        live_price_map[key] = (
+            (val['cost'] / val['weight']).quantize(Decimal('0.001'))
+            if val['weight'] > 0 else Decimal('0.000')
+        )
+
+    # ── Aggregation ────────────────────────────────────────────────────────
+    # report_items[item_code] = { aggregated fields }
+    # Purchase amount is accumulated day by day using that day's live price
+    report_items = {}
+
+    def process_details(details_qs):
+        for detail in details_qs:
+            item       = detail.item
+            category   = item.category
+            sales_date = detail.sales.sales_date
+            branch     = detail.sales.branch
+
+            yp         = item.yieldpercentage_set.first()
+            multiplier = yp.multipler if yp else Decimal('1.000')
+
+            net_weight  = detail.net_weight or Decimal('0.000')
+            live_weight = (net_weight * multiplier).quantize(Decimal('0.001'))
+
+            # Look up THIS day's live price for this category at this branch
+            price_key       = (category.pk, sales_date, branch.pk)
+            live_price      = live_price_map.get(price_key, Decimal('0.000'))
+
+            # Cost for this detail row = live weight × that day's price
+            purchase_amount = (live_weight * live_price).quantize(Decimal('0.01'))
+            sales_amount    = detail.total_amount or Decimal('0.00')
+            profit          = (sales_amount - purchase_amount).quantize(Decimal('0.01'))
+
+            item_key = item.code
+            if item_key not in report_items:
+                report_items[item_key] = {
+                    'code':              item.code,
+                    'name':              item.name,
+                    'total_qty':         Decimal('0.000'),
+                    'total_live_weight': Decimal('0.000'),
+                    'total_sales':       Decimal('0.00'),
+                    'total_purchase':    Decimal('0.00'),
+                    'total_profit':      Decimal('0.00'),
+                }
+
+            row = report_items[item_key]
+            row['total_qty']          += net_weight
+            row['total_live_weight']  += live_weight
+            row['total_sales']        += sales_amount
+            row['total_purchase']     += purchase_amount
+            row['total_profit']       += profit
+
+    # ── Wholesale ──────────────────────────────────────────────────────────
+    wholesale_qs = WholesaleSalesDetails.objects.filter(
+        sales__delete_status=False,
+        sales__sales_date__gte=from_date_obj,
+        sales__sales_date__lte=to_date_obj,
+    ).select_related('sales__branch', 'item', 'item__category')
+
+    if selected_branch:
+        wholesale_qs = wholesale_qs.filter(sales__branch=selected_branch)
+    elif not is_admin_like:
+        wholesale_qs = wholesale_qs.none()
+
+    process_details(wholesale_qs)
+
+    # ── Retail ─────────────────────────────────────────────────────────────
+    retail_qs = RetailSalesDetails.objects.filter(
+        sales__delete_status=False,
+        sales__sales_date__gte=from_date_obj,
+        sales__sales_date__lte=to_date_obj,
+    ).select_related('sales__branch', 'item', 'item__category')
+
+    if selected_branch:
+        retail_qs = retail_qs.filter(sales__branch=selected_branch)
+    elif not is_admin_like:
+        retail_qs = retail_qs.none()
+
+    process_details(retail_qs)
+
+    # ── Sort by item name ──────────────────────────────────────────────────
+    sorted_items = dict(sorted(report_items.items(), key=lambda x: x[1]['name']))
+
+    # ── Grand totals ───────────────────────────────────────────────────────
+    grand_sales    = sum(r['total_sales']    for r in sorted_items.values())
+    grand_purchase = sum(r['total_purchase'] for r in sorted_items.values())
+    grand_profit   = grand_sales - grand_purchase
+    profit_pct     = (
+        ((grand_profit * 100) / grand_sales).quantize(Decimal('0.01'))
+        if grand_sales > 0 else Decimal('0.00')
+    )
+
+    context = {
+        'report_items':    sorted_items,
+        'grand_sales':     grand_sales,
+        'grand_purchase':  grand_purchase,
+        'grand_profit':    grand_profit,
+        'profit_pct':      profit_pct,
+        'is_admin_like':   is_admin_like,
+        'branches':        Branch.objects.all() if is_admin_like else [],
+        'selected_branch': selected_branch,
+        'from_date':       from_date,
+        'to_date':         to_date,
+        'today':           today.strftime('%Y-%m-%d'),
+        'role':            request.user.role,
+    }
+
+    return render(request, 'item_wise_profit_report.html', context)
+
+@login_required(login_url='login')
 def wholesale_profit_report(request):
     is_admin_like = request.user.role in ['super_admin', 'admin']
 
