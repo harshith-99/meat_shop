@@ -854,66 +854,63 @@ def daily_stock_update(request):
             initial_data.append(initial)
     
     # --- Category-wise live weight stats ---
+    # ───────── Category-wise Live Weight Stats ─────────
     category_live_stats = {}
-    
+
     for category, items in category_items.items():
-        total_live_purchase = Decimal('0.000')
-        total_live_sales    = Decimal('0.000')
-        total_live_closing  = Decimal('0.000')
-    
+        total_live_total_stock = Decimal('0.000')   # Total available (Opening + Purchase) in live weight
+        total_live_sales       = Decimal('0.000')
+        total_live_closing     = Decimal('0.000')
+
         for item in items:
             yp = item.yieldpercentage_set.first()
             multiplier = yp.multipler if yp else Decimal('1.000')
-    
+
+            # Fetch fresh data
+            opening = get_previous_closing_stock(item, selected_date, branch)
             purchase = get_purchase_stock(item, selected_date, branch)
-            sales    = get_todays_sales(item, selected_date, branch)
-    
-            # Use saved closing stock if it exists, else 0
+            sales = get_todays_sales(item, selected_date, branch)
+
+            # Get saved closing stock if exists
             rec = existing_map.get(item.id)
             closing = rec.closing_stock if rec else Decimal('0.000')
-    
-            total_live_purchase += (purchase * multiplier).quantize(Decimal('0.001'))
-            total_live_sales    += (sales    * multiplier).quantize(Decimal('0.001'))
-            total_live_closing  += (closing  * multiplier).quantize(Decimal('0.001'))
-    
-        # Theoretical loss = Live Purchase - Live Sales
-        theoretical_loss = total_live_purchase - total_live_sales
-    
-        # Theoretical loss %
-        if total_live_purchase > 0:
-            theoretical_loss_pct = (theoretical_loss * 100 / total_live_purchase).quantize(Decimal('0.01'))
-        else:
-            theoretical_loss_pct = Decimal('0.00')
-    
-        # Physical loss weight = sum of live closing stock (closing × multiplier)
-        physical_loss_weight = total_live_closing
-    
-        # Physical loss weight %
-        if total_live_purchase > 0:
-            physical_loss_pct = (physical_loss_weight * 100 / total_live_purchase).quantize(Decimal('0.01'))
-        else:
-            physical_loss_pct = Decimal('0.00')
-    
-        # Stock loss = Theoretical loss - Physical loss weight
-        stock_loss = theoretical_loss - physical_loss_weight
-    
-        # Stock loss %
-        if total_live_purchase > 0:
-            stock_loss_pct = (stock_loss * 100 / total_live_purchase).quantize(Decimal('0.01'))
-        else:
-            stock_loss_pct = Decimal('0.00')
-    
-        category_live_stats[category.pk] = {
-            'total_live_purchase':   total_live_purchase,
-            'total_live_sales':      total_live_sales,
-            'theoretical_loss':      theoretical_loss,
-            'theoretical_loss_pct':  theoretical_loss_pct,
-            'physical_loss_weight':  physical_loss_weight,
-            'physical_loss_pct':     physical_loss_pct,
-            'stock_loss':            stock_loss,
-            'stock_loss_pct':        stock_loss_pct,
-        }
 
+            # Convert to live weight
+            live_total_stock = (opening + purchase) * multiplier
+            live_sales       = sales * multiplier
+            live_closing     = closing * multiplier
+
+            total_live_total_stock += live_total_stock.quantize(Decimal('0.001'))
+            total_live_sales       += live_sales.quantize(Decimal('0.001'))
+            total_live_closing     += live_closing.quantize(Decimal('0.001'))
+
+        # ─── CORRECT CALCULATIONS ───
+        theoretical_loss = total_live_total_stock - total_live_sales          # ← This is correct
+
+        physical_loss_weight = total_live_closing
+
+        stock_loss = theoretical_loss - physical_loss_weight
+
+        # Percentages
+        theoretical_loss_pct = (theoretical_loss * 100 / total_live_total_stock).quantize(Decimal('0.01')) \
+            if total_live_total_stock > 0 else Decimal('0.00')
+
+        physical_loss_pct = (physical_loss_weight * 100 / total_live_total_stock).quantize(Decimal('0.01')) \
+            if total_live_total_stock > 0 else Decimal('0.00')
+
+        stock_loss_pct = (stock_loss * 100 / total_live_total_stock).quantize(Decimal('0.01')) \
+            if total_live_total_stock > 0 else Decimal('0.00')
+
+        category_live_stats[category.pk] = {
+            'total_live_total_stock': total_live_total_stock,
+            'total_live_sales':       total_live_sales,
+            'theoretical_loss':       theoretical_loss,           # Should now be positive
+            'theoretical_loss_pct':   theoretical_loss_pct,
+            'physical_loss_weight':   physical_loss_weight,
+            'physical_loss_pct':      physical_loss_pct,
+            'stock_loss':             stock_loss,
+            'stock_loss_pct':         stock_loss_pct,
+        }
     # Formset
     DailyStockFormSet = modelformset_factory(
         DailystockUpdate,

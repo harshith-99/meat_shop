@@ -120,18 +120,18 @@
 
                     <div class="col">
                         <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
-                            <div class="small text-muted mb-1">Live Purchase</div>
+                            <div class="small text-muted mb-1">Total Purchase</div>
                             <div class="fw-bold"
                                  id="live-purchase-{{ category.pk }}"
                                  data-value="{{ stats.total_live_purchase|floatformat:3 }}">
-                                {{ stats.total_live_purchase|floatformat:3 }} kg
+                                {{ stats.total_live_total_stock|floatformat:3 }} kg
                             </div>
                         </div>
                     </div>
 
                     <div class="col">
                         <div class="p-2 rounded bg-white border h-100 d-flex flex-column justify-content-center">
-                            <div class="small text-muted mb-1">Live Sales</div>
+                            <div class="small text-muted mb-1">Total Sales</div>
                             <div class="fw-bold"
                                  id="live-sales-{{ category.pk }}"
                                  data-value="{{ stats.total_live_sales|floatformat:3 }}">
@@ -204,9 +204,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const spoilage = spoilageInput ? parseFloat(spoilageInput.value || 0) : 0;
         const closing  = closingInput  ? parseFloat(closingInput.value  || 0) : 0;
 
-        const opening  = parseFloat(row.querySelector('.opening-display')?.innerText  || 0);
+        const opening  = parseFloat(row.querySelector('.opening-display')?.innerText || 0);
         const purchase = parseFloat(row.querySelector('.purchase-display')?.innerText || 0);
-        const sales    = parseFloat(row.querySelector('.sales-display')?.innerText    || 0);
+        const sales    = parseFloat(row.querySelector('.sales-display')?.innerText || 0);
 
         const totalStock = opening + purchase;
         const actual     = (totalStock - sales) - spoilage;
@@ -221,6 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const liveClosing    = closing  * multiplier;
         const liveWeightLoss = liveActual - liveClosing;
 
+        // Update hidden fields for saving
         const updateField = (suffix, val) => {
             const field = row.querySelector(`input[name$="${suffix}"]`);
             if (field) field.value = val.toFixed(3);
@@ -238,6 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateField('-live_weight_closing', liveClosing);
         updateField('-live_weight_loss',    liveWeightLoss);
 
+        // Update visible text
         const setText = (cls, val) => {
             const el = row.querySelector(cls);
             if (el) el.innerText = val.toFixed(3);
@@ -245,65 +247,74 @@ document.addEventListener('DOMContentLoaded', () => {
         setText('.total-display',     totalStock);
         setText('.actual-value',      actual);
         setText('.weight-loss-value', weightLoss);
+
+        // Trigger category stats recalculation
+        const catId = row.dataset.categoryId;
+        if (catId) recalcCategoryStats(catId);
     }
 
+    // ─── CORRECT CATEGORY STATS RECALCULATION ───
     function recalcCategoryStats(categoryId) {
         const rows = document.querySelectorAll(`.item-row[data-category-id="${categoryId}"]`);
 
-        const livePurchaseEl = document.getElementById(`live-purchase-${categoryId}`);
-        const liveSalesEl    = document.getElementById(`live-sales-${categoryId}`);
-        if (!livePurchaseEl || !liveSalesEl) return;
+        let totalLivePurchase = 0;
+        let totalLiveSales    = 0;
+        let totalLiveClosing  = 0;
 
-        const totalLivePurchase = parseFloat(livePurchaseEl.dataset.value || 0);
-        const totalLiveSales    = parseFloat(liveSalesEl.dataset.value    || 0);
-
-        let totalLiveClosing = 0;
         rows.forEach(row => {
-            const multiplier   = parseFloat(row.dataset.multiplier || 1);
+            const multiplier = parseFloat(row.dataset.multiplier || 1);
+            const opening  = parseFloat(row.querySelector('.opening-display')?.innerText || 0);
+            const purchase = parseFloat(row.querySelector('.purchase-display')?.innerText || 0);
+            const sales    = parseFloat(row.querySelector('.sales-display')?.innerText || 0);
             const closingInput = row.querySelector('input[name$="-closing_stock"]');
-            const closing      = closingInput ? parseFloat(closingInput.value || 0) : 0;
+            const closing = closingInput ? parseFloat(closingInput.value || 0) : 0;
+
+            totalLivePurchase += (opening + purchase) * multiplier;
+            totalLiveSales    += sales * multiplier;
             totalLiveClosing  += closing * multiplier;
         });
 
-        const theoreticalLoss    = totalLivePurchase - totalLiveSales;
+        const theoreticalLoss    = totalLivePurchase - totalLiveSales;     // ← Correct formula
+        const physicalLossWeight = totalLiveClosing;
+        const stockLoss          = theoreticalLoss - physicalLossWeight;
+
         const theoreticalLossPct = totalLivePurchase > 0 ? (theoreticalLoss * 100 / totalLivePurchase) : 0;
-        const physClosePct       = totalLivePurchase > 0 ? (totalLiveClosing * 100 / totalLivePurchase) : 0;
-        const stockLoss          = theoreticalLoss - totalLiveClosing;
+        const physicalLossPct    = totalLivePurchase > 0 ? (physicalLossWeight * 100 / totalLivePurchase) : 0;
         const stockLossPct       = totalLivePurchase > 0 ? (stockLoss * 100 / totalLivePurchase) : 0;
 
-        // Update only the <span> inside the card — the " kg" and "%" text nodes stay untouched
-        const setSpan = (id, val, dec) => {
+        // Update the displayed values
+        const setSpan = (id, val, decimals = 3) => {
             const el = document.getElementById(id);
-            if (el) el.innerText = val.toFixed(dec);
+            if (el) el.innerText = val.toFixed(decimals);
         };
 
         setSpan(`theo-loss-${categoryId}`,      theoreticalLoss,    3);
         setSpan(`theo-loss-pct-${categoryId}`,  theoreticalLossPct, 2);
-        setSpan(`phys-close-${categoryId}`,     totalLiveClosing,   3);
-        setSpan(`phys-close-pct-${categoryId}`, physClosePct,       2);
+        setSpan(`phys-close-${categoryId}`,     physicalLossWeight, 3);
+        setSpan(`phys-close-pct-${categoryId}`, physicalLossPct,    2);
         setSpan(`stock-loss-${categoryId}`,     stockLoss,          3);
         setSpan(`stock-loss-pct-${categoryId}`, stockLossPct,       2);
     }
 
-    // Attach listeners
+    // Attach listeners to editable fields
     document.querySelectorAll('input[name$="-spoilage"], input[name$="-closing_stock"]').forEach(input => {
         input.addEventListener('input', function () {
             const row = this.closest('.item-row');
             if (row) {
                 recalcRow(row);
-                const catId = row.dataset.categoryId;
-                if (catId) recalcCategoryStats(catId);
             }
         });
     });
 
-    // Initial pass
-    document.querySelectorAll('.item-row').forEach(row => recalcRow(row));
+    // Initial calculation on page load
+    document.querySelectorAll('.item-row').forEach(row => {
+        recalcRow(row);
+    });
 
-    const catIds = new Set(
-        [...document.querySelectorAll('.item-row[data-category-id]')]
-            .map(r => r.dataset.categoryId).filter(Boolean)
-    );
+    // Initial category stats
+    const catIds = new Set([...document.querySelectorAll('.item-row[data-category-id]')]
+        .map(r => r.dataset.categoryId).filter(Boolean));
+
     catIds.forEach(id => recalcCategoryStats(id));
 });
 </script>
