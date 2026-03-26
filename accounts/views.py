@@ -2963,25 +2963,39 @@ def wholesale_receipt(request, pk):
 @login_required
 def wholesale_sales_delete(request, pk):
     if request.user.role not in ['super_admin', 'admin', 'manager']:
-        return JsonResponse({'error': 'Unauthorized'}, status=403)
+        return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
 
     sale = get_object_or_404(WholesaleSales, pk=pk, delete_status=False)
-    
-    with transaction.atomic():
-        for detail in sale.wholesalesalesdetails_set.all():
-            item = detail.item
-            if item.category.is_weight_based:
-                item.stock += detail.net_weight
-            else:
-                item.stock += detail.qty
-            item.save()
 
-        sale.delete_status = True
-        sale.deleted_by = request.user
-        sale.save()
+    try:
+        with transaction.atomic():
+            # Restore stock for all items in this sale
+            for detail in sale.details.all():          # ← Use correct related_name
+                item = detail.item
+                
+                if item.category.is_weight_based:
+                    item.stock += detail.net_weight or Decimal('0.000')
+                else:
+                    item.stock += detail.qty or 0
+                
+                item.save()
 
-    return JsonResponse({'success': True})
+            # Soft delete the sale
+            sale.delete_status = True
+            sale.deleted_by = request.user
+            sale.save()
 
+        return JsonResponse({
+            'success': True,
+            'message': f'Sale #{sale.receipt_no} deleted successfully. Stock restored.'
+        })
+
+    except Exception as e:
+        print(f"Delete error for sale {pk}: {str(e)}")   # Log for debugging
+        return JsonResponse({
+            'success': False,
+            'error': 'Failed to delete sale. Please try again.'
+        }, status=500)
 
 
 @require_GET

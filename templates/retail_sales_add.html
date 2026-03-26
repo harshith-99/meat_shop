@@ -262,14 +262,23 @@ MAX_DISCOUNT = 500;
 // Auto change payment mode when take-away employee is selected
 $(document).on('change', '#id_take_amay_employee', function() {
     if ($(this).val() && $(this).val() !== '') {
-        $('#id_payment_mode').val('pending');
-    }
+    $('#id_payment_mode').val('pending');
+    
+    // NEW: Set Pending Amount = Grand Total when Take Away is selected
+    let grandTotal = parseFloat($("#id_grand_total").val()) || 0;
+    $("#id_pending_amount").val(grandTotal.toFixed(2));
+    
+    // Reset other payment fields
+    $("#id_total_cash, #id_total_upi, #id_total_card").val("0.00");
+    
+    updateTotalsAndFields();
+}
 });
 
 $(document).ready(function() {
     setTimeout(() => {
         $('#id_take_amay_employee').trigger('change');
-    }, 100);
+    }, 100);    
 
     $('#id_branch').on('change', function() {
         const branchId = $(this).val();
