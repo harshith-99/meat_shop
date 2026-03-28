@@ -710,9 +710,9 @@ def daily_stock_report(request):
             yp = r.item.yieldpercentage_set.first()
             multiplier = yp.multipler if yp else Decimal('1.000')
 
-            total_live_purchase += (r.purchase_stock * multiplier).quantize(Decimal('0.001'))
-            total_live_sales    += (r.todays_sales   * multiplier).quantize(Decimal('0.001'))
-            total_live_closing  += (r.closing_stock  * multiplier).quantize(Decimal('0.001'))
+            total_live_purchase += ((r.opening_stock + r.purchase_stock) * multiplier).quantize(Decimal('0.001'))
+            total_live_sales    += (r.todays_sales  * multiplier).quantize(Decimal('0.001'))
+            total_live_closing  += (r.closing_stock * multiplier).quantize(Decimal('0.001'))
 
         theoretical_loss     = total_live_purchase - total_live_sales
         theoretical_loss_pct = (theoretical_loss * 100 / total_live_purchase).quantize(Decimal('0.01')) if total_live_purchase > 0 else Decimal('0.00')
