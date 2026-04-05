@@ -62,8 +62,10 @@
                     <td class="gstin">{{ customer.opening_balance }}</td>
                     <td>
                         <a href="{% url 'customer_update' customer.pk %}" class="btn btn-warning btn-sm">Edit</a>
-                        <a href="{% url 'customer_delete' customer.pk %}" class="btn btn-danger btn-sm ms-1"
-                           onclick="return confirm('Delete this customer?');">Delete</a>
+                        {% if request.user.role == 'super_admin' %}
+                            <a href="{% url 'customer_delete' customer.pk %}" class="btn btn-danger btn-sm ms-1"
+                            onclick="return confirm('Delete this customer?');">Delete</a>
+                        {% endif %}
                     </td>
                 </tr>
                 {% empty %}

@@ -1,0 +1,58 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Purchase List Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .logo { max-height: 80px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #333; padding: 8px; }
+        th { background-color: #f0f0f0; }
+        .text-end { text-align: right; }
+        .footer { margin-top: 40px; text-align: right; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="{{ logo_path }}" class="logo" alt="Jaan Chicken">
+        <h2>Purchase Report</h2>
+        <p><strong>Period:</strong> {{ from_date }} to {{ to_date }}</p>
+        {% if selected_branch %}
+            <p><strong>Branch:</strong> {{ selected_branch.branch_name }}</p>
+        {% endif %}
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Invoice No</th>
+                <th>Date</th>
+                <th>Supplier</th>
+                {% if is_admin_like %}<th>Branch</th>{% endif %}
+                <th>Qty</th>
+                <th>Net Weight (kg)</th>
+                <th>Grand Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for data in purchases %}
+            <tr>
+                <td>{{ data.purchase.invoice_number }}</td>
+                <td>{{ data.purchase.purchase_date|date:"d/m/Y" }}</td>
+                <td>{{ data.purchase.supplier.supplier_name }}</td>
+                {% if is_admin_like %}<td>{{ data.purchase.branch.branch_name }}</td>{% endif %}
+                <td>{{ data.total_qty }}</td>
+                <td class="text-end">{{ data.total_net_weight|floatformat:2 }}</td>
+                <td class="text-end">₹{{ data.purchase.grand_total|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="footer">
+        Generated on: {{ today }}
+    </div>
+</body>
+</html>

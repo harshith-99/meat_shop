@@ -72,10 +72,8 @@ def item_wise_profit_report(request):
     else:
         selected_branch = request.user.branch if request.user.branch else None
 
-    # ── Pre-build live purchase price lookup ───────────────────────────────
+    # ── Pre-build live purchase price lookup (within date range) ───────────
     # Key: (category_id, purchase_date, branch_id) → price_per_kg
-    # This means each day gets its own price, so multi-day ranges are handled
-    # correctly — Day 1 sales use Day 1 price, Day 2 sales use Day 2 price, etc.
     purchase_qs = PurchaseDetail.objects.filter(
         item__is_live=True,
         purchase__purchase_date__gte=from_date_obj,
@@ -101,9 +99,46 @@ def item_wise_profit_report(request):
             if val['weight'] > 0 else Decimal('0.000')
         )
 
+    # ── Fallback price cache ───────────────────────────────────────────────
+    # When a day has no live purchase, find the most recent one before that date.
+    # Cache results so we don't hit DB repeatedly for the same (category, date, branch).
+    fallback_price_cache = {}
+
+    def get_live_price(category_id, sales_date, branch_id):
+        """Return live price for the day, or fall back to last known price."""
+        key = (category_id, sales_date, branch_id)
+
+        # Exact match found in the date-range map
+        if key in live_price_map:
+            return live_price_map[key]
+
+        # Check fallback cache
+        if key in fallback_price_cache:
+            return fallback_price_cache[key]
+
+        # Query the last inserted live purchase for this category+branch before this date
+        fallback_qs = PurchaseDetail.objects.filter(
+            item__is_live=True,
+            item__category_id=category_id,
+            purchase__purchase_date__lte=sales_date,
+            purchase__delete_status=False,
+        ).select_related('purchase')
+
+        if branch_id:
+            fallback_qs = fallback_qs.filter(purchase__branch_id=branch_id)
+
+        fallback_qs = fallback_qs.order_by('-purchase__purchase_date', '-purchase__created_date')
+
+        last_pd = fallback_qs.first()
+        if last_pd and last_pd.net_weight and last_pd.net_weight > 0:
+            price = (last_pd.total_amount / last_pd.net_weight).quantize(Decimal('0.001'))
+        else:
+            price = Decimal('0.000')
+
+        fallback_price_cache[key] = price
+        return price
+
     # ── Aggregation ────────────────────────────────────────────────────────
-    # report_items[item_code] = { aggregated fields }
-    # Purchase amount is accumulated day by day using that day's live price
     report_items = {}
 
     def process_details(details_qs):
@@ -119,11 +154,8 @@ def item_wise_profit_report(request):
             net_weight  = detail.net_weight or Decimal('0.000')
             live_weight = (net_weight * multiplier).quantize(Decimal('0.001'))
 
-            # Look up THIS day's live price for this category at this branch
-            price_key       = (category.pk, sales_date, branch.pk)
-            live_price      = live_price_map.get(price_key, Decimal('0.000'))
-
-            # Cost for this detail row = live weight × that day's price
+            # Get this day's price — falls back to last known if not found
+            live_price      = get_live_price(category.pk, sales_date, branch.pk)
             purchase_amount = (live_weight * live_price).quantize(Decimal('0.01'))
             sales_amount    = detail.total_amount or Decimal('0.00')
             profit          = (sales_amount - purchase_amount).quantize(Decimal('0.01'))
@@ -212,6 +244,7 @@ def wholesale_profit_report(request):
     customer_id   = request.GET.get('customer')
     from_date_str = request.GET.get('from_date')
     to_date_str   = request.GET.get('to_date')
+    export_type   = request.GET.get('export')
 
     today     = date.today()
     from_date = from_date_str or today.strftime('%Y-%m-%d')
@@ -229,7 +262,7 @@ def wholesale_profit_report(request):
         to_date_obj = today
         to_date = today.strftime('%Y-%m-%d')
 
-    # ── Determine branch scope ─────────────────────────────────────────────
+    # ── Branch / customer scope ────────────────────────────────────────────
     selected_branch   = None
     selected_customer = None
 
@@ -242,13 +275,8 @@ def wholesale_profit_report(request):
     if customer_id:
         selected_customer = Customer.objects.filter(id=customer_id).first()
 
-    # ── Pre-build live purchase price lookup ───────────────────────────────
-    # Structure: live_price_map[(category_id, purchase_date, branch_id)] = price_per_kg
-    #
-    # For each purchase detail where item.is_live=True:
-    #   price_per_kg = total_amount / net_weight   (actual cost per kg of live bird)
-    #   keyed by (category_id, purchase_date, branch_id)
-
+    # ── Pre-build live purchase price lookup (within date range) ───────────
+    # Key: (category_id, purchase_date, branch_id) → price_per_kg
     purchase_qs = PurchaseDetail.objects.filter(
         item__is_live=True,
         purchase__purchase_date__gte=from_date_obj,
@@ -259,10 +287,7 @@ def wholesale_profit_report(request):
     if selected_branch:
         purchase_qs = purchase_qs.filter(purchase__branch=selected_branch)
 
-    # If multiple purchases of the live item on the same day (edge case),
-    # aggregate total cost and total weight → weighted average price
-    live_price_raw = {}  # (category_id, date, branch_id) → {cost, weight}
-
+    live_price_raw = {}
     for pd in purchase_qs:
         key = (
             pd.item.category_id,
@@ -276,10 +301,48 @@ def wholesale_profit_report(request):
 
     live_price_map = {}
     for key, val in live_price_raw.items():
-        if val['weight'] > 0:
-            live_price_map[key] = (val['cost'] / val['weight']).quantize(Decimal('0.001'))
+        live_price_map[key] = (
+            (val['cost'] / val['weight']).quantize(Decimal('0.001'))
+            if val['weight'] > 0 else Decimal('0.000')
+        )
+
+    # ── Fallback price cache ───────────────────────────────────────────────
+    # When no purchase exists for a given (category, date, branch),
+    # find the most recently inserted live purchase on or before that date.
+    fallback_price_cache = {}
+
+    def get_live_price(category_id, sales_date, branch_id):
+        """Return live price for the day, or fall back to last known price."""
+        key = (category_id, sales_date, branch_id)
+
+        if key in live_price_map:
+            return live_price_map[key]
+
+        if key in fallback_price_cache:
+            return fallback_price_cache[key]
+
+        fallback_qs = PurchaseDetail.objects.filter(
+            item__is_live=True,
+            item__category_id=category_id,
+            purchase__purchase_date__lte=sales_date,
+            purchase__delete_status=False,
+        ).select_related('purchase')
+
+        if branch_id:
+            fallback_qs = fallback_qs.filter(purchase__branch_id=branch_id)
+
+        fallback_qs = fallback_qs.order_by(
+            '-purchase__purchase_date', '-purchase__created_date'
+        )
+
+        last_pd = fallback_qs.first()
+        if last_pd and last_pd.net_weight and last_pd.net_weight > 0:
+            price = (last_pd.total_amount / last_pd.net_weight).quantize(Decimal('0.001'))
         else:
-            live_price_map[key] = Decimal('0.000')
+            price = Decimal('0.000')
+
+        fallback_price_cache[key] = price
+        return price
 
     # ── Sales details queryset ─────────────────────────────────────────────
     details_qs = WholesaleSalesDetails.objects.filter(
@@ -310,28 +373,18 @@ def wholesale_profit_report(request):
         sales_date    = detail.sales.sales_date
         branch        = detail.sales.branch
 
-        # Multiplier for this item
         yp         = item.yieldpercentage_set.first()
         multiplier = yp.multipler if yp else Decimal('1.000')
 
-        # Live converted weight = net_weight × multiplier
         net_weight  = detail.net_weight or Decimal('0.000')
         live_weight = (net_weight * multiplier).quantize(Decimal('0.001'))
 
-        # Live purchase price for this category on this date at this branch
-        price_key      = (category.pk, sales_date, branch.pk)
-        live_price     = live_price_map.get(price_key, Decimal('0.000'))
-
-        # Purchase amount = live_weight × live_price_per_kg
+        # Get this day's price — falls back to last known if not found
+        live_price      = get_live_price(category.pk, sales_date, branch.pk)
         purchase_amount = (live_weight * live_price).quantize(Decimal('0.01'))
+        sales_amount    = detail.total_amount or Decimal('0.00')
+        profit          = (sales_amount - purchase_amount).quantize(Decimal('0.01'))
 
-        # Sales amount
-        sales_amount = detail.total_amount or Decimal('0.00')
-
-        # Profit for this row
-        profit = (sales_amount - purchase_amount).quantize(Decimal('0.01'))
-
-        # ── Aggregate ──
         if customer_name not in report_data:
             report_data[customer_name] = {
                 'customer':       customer,
@@ -386,7 +439,29 @@ def wholesale_profit_report(request):
         'from_date':         from_date,
         'to_date':           to_date,
         'today':             today.strftime('%Y-%m-%d'),
+        'role':              request.user.role,
+        'logo_path':         logo_path,
     }
+
+    # ── PDF Export ─────────────────────────────────────────────────────────
+    if export_type == 'pdf':
+        today_str = now().strftime('%Y-%m-%d')
+ 
+        if selected_customer:
+            cust_name = selected_customer.customer_name.replace(' ', '_')
+        else:
+            cust_name = 'All_Customers'
+ 
+        filename = f"{today_str}-wholesale-profit-{cust_name}.pdf"
+ 
+        pdf = render_to_pdf('wholesale_profit_report_pdf.html', context)
+ 
+        if not pdf:
+            return HttpResponse("PDF generation error", status=500)
+ 
+        response = HttpResponse(pdf, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
     return render(request, 'wholesale_profit_report.html', context)
 
@@ -1259,14 +1334,13 @@ def expense_list(request):
 
     today = date.today()
 
-    # Get filter values from GET
-    branch_id = request.GET.get('branch')
+    branch_id    = request.GET.get('branch')
     from_date_str = request.GET.get('from_date')
-    to_date_str = request.GET.get('to_date')
+    to_date_str   = request.GET.get('to_date')
+    category_id   = request.GET.get('category')          # ← new
 
-    # Parse dates safely — default to today only if invalid
     from_date = today
-    to_date = today
+    to_date   = today
 
     if from_date_str:
         try:
@@ -1280,14 +1354,12 @@ def expense_list(request):
         except ValueError:
             to_date = today
 
-    # Base queryset with date filter always applied
     expenses = Expense.objects.filter(
         delete_status=False,
         payment_date__gte=from_date,
         payment_date__lte=to_date
     ).select_related('expense', 'staff', 'branch')
 
-    # Branch filter
     selected_branch = None
     if is_admin_like:
         if branch_id and branch_id.isdigit():
@@ -1300,31 +1372,37 @@ def expense_list(request):
         else:
             expenses = expenses.none()
 
+    # ── Category filter (available to all roles) ──────────────────────────
+    selected_category = None
+    if category_id and category_id.isdigit():
+        expenses = expenses.filter(expense_id=category_id)
+        selected_category = ExpenseCategory.objects.filter(pk=category_id, delete_status=False).first()
+
     expenses = expenses.order_by('-payment_date')
 
-    # ───────── Calculations (unchanged) ─────────
     total_expense = expenses.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
-    petty_cash = PettyCashBalance.objects.first()
+    petty_cash         = PettyCashBalance.objects.first()
     petty_cash_balance = petty_cash.balance if petty_cash else Decimal('0.00')
-
     closing_petty_cash = petty_cash_balance - total_expense
 
     total_expense_only = expenses.filter(expense__type='expense').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    actual_expense = closing_petty_cash - total_expense_only
+    actual_expense     = closing_petty_cash - total_expense_only
 
     context = {
-        'expenses': expenses,
-        'branches': Branch.objects.all() if is_admin_like else [],
-        'is_admin_like': is_admin_like,
-        'selected_branch': selected_branch,
-        'from_date': from_date.strftime('%Y-%m-%d'),  # for input value
-        'to_date': to_date.strftime('%Y-%m-%d'),      # for input value
-        'today': today.strftime('%Y-%m-%d'),
-        'total_expense': total_expense,
+        'expenses':          expenses,
+        'branches':          Branch.objects.all() if is_admin_like else [],
+        'categories':        ExpenseCategory.objects.filter(delete_status=False).order_by('expense_name'),  # ← new
+        'is_admin_like':     is_admin_like,
+        'selected_branch':   selected_branch,
+        'selected_category': selected_category,          # ← new
+        'from_date':         from_date.strftime('%Y-%m-%d'),
+        'to_date':           to_date.strftime('%Y-%m-%d'),
+        'today':             today.strftime('%Y-%m-%d'),
+        'total_expense':     total_expense,
         'petty_cash_balance': petty_cash_balance,
         'closing_petty_cash': closing_petty_cash,
-        'actual_expense': actual_expense,
+        'actual_expense':    actual_expense,
     }
     return render(request, 'expense_list.html', context)
 
@@ -2232,6 +2310,7 @@ def purchase_list(request):
     from_date_str = request.GET.get('from_date')
     to_date_str = request.GET.get('to_date')
     supplier_id = request.GET.get('supplier')
+    export_type = request.GET.get('export')
 
     # Default: today
     today = date.today()
@@ -2309,7 +2388,19 @@ def purchase_list(request):
         'today': today.strftime('%Y-%m-%d'),
         'suppliers': Supplier.objects.all(),
         'selected_supplier': selected_supplier,
+        'logo_path': logo_path,
     }
+
+    # ================= PDF EXPORT =================
+    if export_type == 'pdf':
+        today_str = now().strftime('%Y-%m-%d')
+        filename = f"{today_str}-purchase-list.pdf"
+        pdf = render_to_pdf('purchase_list_pdf.html', context)
+        if not pdf:
+            return HttpResponse("PDF generation error", status=500)
+        response = HttpResponse(pdf, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
     return render(request, 'purchase_list.html', context)
 
 @login_required(login_url='login')

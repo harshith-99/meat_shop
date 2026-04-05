@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Wholesale Profit Report</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; font-size: 11px; color: #000; }
+
+        .header { text-align: center; margin-bottom: 14px; border-bottom: 2px solid #000; padding-bottom: 8px; }
+        .header h2 { font-size: 16px; font-weight: bold; margin-bottom: 3px; }
+        .header p  { font-size: 11px; color: #333; }
+
+        .customer-block { margin-bottom: 18px; page-break-inside: avoid; }
+
+        .customer-title {
+            background: #2d6a4f;
+            color: #fff;
+            padding: 5px 8px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+        }
+        th {
+            background: #f2f2f2;
+            border: 1px solid #bbb;
+            padding: 4px 6px;
+            text-align: center;
+            font-weight: bold;
+        }
+        td {
+            border: 1px solid #ccc;
+            padding: 3px 6px;
+        }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+
+        tfoot td {
+            background: #e8e8e8;
+            font-weight: bold;
+        }
+
+        .summary {
+            margin-top: 6px;
+            border: 1px solid #ccc;
+            padding: 6px 10px;
+            background: #f9f9f9;
+            font-size: 10px;
+        }
+        .summary table { font-size: 10px; }
+        .summary td { border: none; padding: 2px 10px; }
+        .summary .label { color: #555; }
+        .summary .value { font-weight: bold; }
+
+        .footer { text-align: center; font-size: 9px; color: #666; margin-top: 20px; border-top: 1px solid #ccc; padding-top: 6px; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h2>Wholesale Profit Report</h2>
+    <p>
+        Period: {{ from_date }} to {{ to_date }}
+        {% if selected_branch %} &nbsp;|&nbsp; Branch: {{ selected_branch.branch_name }}{% endif %}
+        {% if selected_customer %} &nbsp;|&nbsp; Customer: {{ selected_customer.customer_name }}{% endif %}
+    </p>
+</div>
+
+{% for customer_name, data in report_data.items %}
+<div class="customer-block">
+
+    <div class="customer-title">
+        {{ customer_name }}
+        {% if data.customer.customer_phone %} — {{ data.customer.customer_phone }}{% endif %}
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Code</th>
+                <th>Item</th>
+                <th>Qty</th>
+                <th>Net Wt (kg)</th>
+                <th>Live Wt (kg)</th>
+                {% if role == 'super_admin' %}
+                    <th>Purchase (₹)</th>
+                {% endif %}
+                <th>Sales (₹)</th>
+                {% if role == 'super_admin' %}
+                    <th>Profit (₹)</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for item_code, item in data.items.items %}
+            <tr>
+                <td class="text-center">{{ item.code }}</td>
+                <td>{{ item.name }}</td>
+                <td class="text-right">{{ item.total_qty }}</td>
+                <td class="text-right">{{ item.total_net_weight|floatformat:3 }}</td>
+                <td class="text-right">{{ item.total_live_weight|floatformat:3 }}</td>
+                {% if role == 'super_admin' %}
+                    <td class="text-right">{{ item.total_purchase|floatformat:2 }}</td>
+                {% endif %}
+                <td class="text-right">{{ item.total_sales|floatformat:2 }}</td>
+                {% if role == 'super_admin' %}
+                    <td class="text-right">{{ item.total_profit|floatformat:2 }}</td>
+                {% endif %}
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="8" class="text-center">No items found</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="5" class="text-right">Customer Total</td>
+                {% if role == 'super_admin' %}
+                    <td class="text-right">{{ data.total_purchase|floatformat:2 }}</td>
+                {% endif %}
+                <td class="text-right">{{ data.total_sales|floatformat:2 }}</td>
+                {% if role == 'super_admin' %}
+                    <td class="text-right">{{ data.total_profit|floatformat:2 }}</td>
+                {% endif %}
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="summary">
+        <table>
+            <tr>
+                {% if role == 'super_admin' %}
+                <td class="label">Total Sales:</td>
+                <td class="value">₹{{ data.total_sales|floatformat:2 }}</td>
+                <td class="label">Total Purchase Cost:</td>
+                <td class="value">₹{{ data.total_purchase|floatformat:2 }}</td>
+                <td class="label">Total Profit:</td>
+                <td class="value">₹{{ data.total_profit|floatformat:2 }}</td>
+                {% else %}
+                <td class="label">Total Sales:</td>
+                <td class="value">₹{{ data.total_sales|floatformat:2 }}</td>
+                {% endif %}
+                <td class="label">Profit %:</td>
+                <td class="value">{{ data.profit_pct|floatformat:2 }}%</td>
+            </tr>
+        </table>
+    </div>
+
+</div>
+{% empty %}
+<p>No wholesale sales found for the selected period.</p>
+{% endfor %}
+
+<div class="footer">
+    Generated on {% now "d M Y, H:i" %} &nbsp;|&nbsp; Wholesale Profit Report
+</div>
+
+</body>
+</html>

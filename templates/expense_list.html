@@ -12,20 +12,21 @@
         </div>
     </div>
 
-    <!-- FILTER CARD - Fixed alignment with Bootstrap grid -->
     <div class="card shadow mb-4">
         <div class="card-header py-3">
             <h6 class="m-0 font-weight-bold text-primary">Filter Expenses</h6>
         </div>
         <div class="card-body">
             <form method="get" class="row g-3 align-items-end">
+
                 {% if is_admin_like %}
                 <div class="col-md-3">
                     <label class="form-label">Branch</label>
                     <select name="branch" class="form-select">
                         <option value="">All Branches</option>
                         {% for b in branches %}
-                        <option value="{{ b.branch_id }}" {% if selected_branch and selected_branch.branch_id == b.branch_id %}selected{% endif %}>
+                        <option value="{{ b.branch_id }}"
+                            {% if selected_branch and selected_branch.branch_id == b.branch_id %}selected{% endif %}>
                             {{ b.branch_name }}
                         </option>
                         {% endfor %}
@@ -33,23 +34,48 @@
                 </div>
                 {% endif %}
 
+                <!-- Category filter — visible to ALL roles -->
                 <div class="col-md-3">
+                    <label class="form-label">Category</label>
+                    <select name="category" class="form-select">
+                        <option value="">All Categories</option>
+                        {% for cat in categories %}
+                        <option value="{{ cat.pk }}"
+                            {% if selected_category and selected_category.pk == cat.pk %}selected{% endif %}>
+                            {{ cat.expense_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-2">
                     <label class="form-label">From Date</label>
                     <input type="date" name="from_date" class="form-control" value="{{ from_date }}">
                 </div>
 
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label">To Date</label>
                     <input type="date" name="to_date" class="form-control" value="{{ to_date }}">
                 </div>
 
-                <div class="col-md-3 d-flex align-items-end gap-2">
+                <div class="col-md-2 d-flex align-items-end gap-2">
                     <button type="submit" class="btn btn-primary">Filter</button>
-                    <a href="{% url 'expense_list' %}" class="btn btn-secondary">Today Only</a>
+                    <a href="{% url 'expense_list' %}" class="btn btn-secondary">Clear</a>
                 </div>
             </form>
         </div>
     </div>
+
+    <!-- Active filter summary -->
+    {% if selected_category %}
+    <div class="alert alert-info py-2">
+        Showing expenses for category: <strong>{{ selected_category.expense_name }}</strong>
+        &nbsp;|&nbsp;
+        <a href="?from_date={{ from_date }}&to_date={{ to_date }}{% if selected_branch %}&branch={{ selected_branch.branch_id }}{% endif %}">
+            Clear category filter
+        </a>
+    </div>
+    {% endif %}
 
     <div class="card shadow">
         <div class="card-body">
@@ -78,24 +104,26 @@
                             <td>₹{{ e.amount|floatformat:2|intcomma }}</td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="7" class="text-center">No expenses found for the selected period.</td></tr>
+                        <tr>
+                            <td colspan="7" class="text-center">No expenses found for the selected period.</td>
+                        </tr>
                         {% endfor %}
                     </tbody>
                     <tfoot>
                         <tr>
-                            <td colspan="6" class="text-end">Total Expense:</td>
+                            <td colspan="6" class="text-end fw-bold">Total Expense:</td>
                             <td>₹{{ total_expense|floatformat:2|intcomma }}</td>
                         </tr>
                         <tr>
-                            <td colspan="6" class="text-end">Petty Cash Balance:</td>
+                            <td colspan="6" class="text-end fw-bold">Petty Cash Balance:</td>
                             <td>₹{{ petty_cash_balance|floatformat:2|intcomma }}</td>
                         </tr>
                         <tr>
-                            <td colspan="6" class="text-end">Closing Petty Cash:</td>
+                            <td colspan="6" class="text-end fw-bold">Closing Petty Cash:</td>
                             <td>₹{{ closing_petty_cash|floatformat:2|intcomma }}</td>
                         </tr>
                         <tr>
-                            <td colspan="6" class="text-end">Actual Expense:</td>
+                            <td colspan="6" class="text-end fw-bold">Actual Expense:</td>
                             <td>₹{{ actual_expense|floatformat:2|intcomma }}</td>
                         </tr>
                     </tfoot>

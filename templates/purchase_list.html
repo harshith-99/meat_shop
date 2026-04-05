@@ -63,11 +63,15 @@
                     </select>
                 </div>
 
-                <div class="col-md-3 align-self-end">
+                <div class="col-md-4 align-self-end">
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-filter"></i> Apply Filter
                     </button>
                     <a href="{% url 'purchase_list' %}" class="btn btn-secondary">Clear</a>
+                    <a href="?{% if request.GET.from_date %}from_date={{ request.GET.from_date }}&{% endif %}{% if request.GET.to_date %}to_date={{ request.GET.to_date }}&{% endif %}{% if request.GET.branch %}branch={{ request.GET.branch }}&{% endif %}{% if request.GET.supplier %}supplier={{ request.GET.supplier }}&{% endif %}export=pdf" 
+                    class="btn btn-danger btn-sm" target="_blank">
+                        <i class="fas fa-file-pdf"></i> Export to PDF
+                    </a>
                 </div>
             </form>
         </div>

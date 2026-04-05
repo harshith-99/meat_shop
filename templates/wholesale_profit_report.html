@@ -65,6 +65,11 @@
                     </button>
                     &nbsp;
                     <a href="{% url 'wholesale_profit_report' %}" class="btn btn-secondary">Clear</a>
+                    
+                    <a href="?from_date={{ from_date }}&to_date={{ to_date }}{% if selected_branch %}&branch={{ selected_branch.branch_id }}{% endif %}{% if selected_customer %}&customer={{ selected_customer.id }}{% endif %}&export=pdf"
+                       class="btn btn-danger">
+                        <i class="fas fa-file-pdf"></i> Export PDF
+                    </a>
                 </div>
             </form>
         </div>
