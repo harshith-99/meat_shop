@@ -1,0 +1,243 @@
+{% load static %}
+{% include "sidebar/sidebar.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 text-gray-800">
+            Daily Summary Report
+            {% if selected_branch %} — {{ selected_branch.branch_name }}{% endif %}
+        </h1>
+    </div>
+
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+
+    <!-- Filter Form -->
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Date</label>
+                    <input type="date" name="date" class="form-control" value="{{ date_str }}" max="{{ today }}">
+                </div>
+                {% if is_admin_like %}
+                <div class="col-md-3">
+                    <label class="form-label">Branch</label>
+                    <select name="branch" class="form-control">
+                        <option value="">-- Select Branch --</option>
+                        {% for b in branches %}
+                            <option value="{{ b.branch_id }}"
+                                {% if selected_branch and selected_branch.branch_id == b.branch_id %}selected{% endif %}>
+                                {{ b.branch_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary">Show Report</button>
+                    <a href="?date={{ date_str }}{% if selected_branch %}&branch={{ selected_branch.branch_id }}{% endif %}&export=pdf"
+                       class="btn btn-danger">📄 PDF</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if not selected_branch and is_admin_like %}
+        <div class="alert alert-warning">
+            Please select a branch to view the report.
+        </div>
+    {% else %}
+
+    <!-- Summary Report -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                Summary for {{ report_date|date:"d M Y" }}
+                {% if selected_branch %} — {{ selected_branch.branch_name }}{% endif %}
+            </h6>
+        </div>
+        <div class="card-body">
+            <table class="table table-bordered">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 50%;">Particular</th>
+                        <th class="text-end" style="width: 25%;">Weight (kg)</th>
+                        <th class="text-end" style="width: 25%;">Amount (₹)</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                    <!-- ========== PURCHASE ========== -->
+                    <tr class="table-primary">
+                        <td colspan="3"><strong>1. PURCHASE</strong></td>
+                    </tr>
+                    <tr>
+                        <td>
+                            Total Purchase
+                            <small class="text-muted d-block">
+                                Live weight (after yield conversion)
+                                {% if total_purchase_qty %} | Pieces: {{ total_purchase_qty }}{% endif %}
+                            </small>
+                        </td>
+                        <td class="text-end">{{ total_purchase_live_weight|floatformat:3 }}</td>
+                        <td class="text-end">{{ total_purchase_amount|floatformat:2 }}</td>
+                    </tr>
+
+                    <!-- ========== RETAIL SALES ========== -->
+                    <tr class="table-success">
+                        <td colspan="3"><strong>2. RETAIL SALES</strong></td>
+                    </tr>
+                    <tr>
+                        <td>
+                            Total Retail Sales
+                            <small class="text-muted d-block">
+                                Live weight (after yield conversion)
+                                {% if total_retail_qty %} | Pieces: {{ total_retail_qty }}{% endif %}
+                            </small>
+                        </td>
+                        <td class="text-end">{{ total_retail_live_weight|floatformat:3 }}</td>
+                        <td class="text-end">{{ total_retail_amount|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td class="ps-4">— Cash</td>
+                        <td></td>
+                        <td class="text-end">{{ total_retail_cash|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td class="ps-4">— UPI</td>
+                        <td></td>
+                        <td class="text-end">{{ total_retail_upi|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td class="ps-4">— Card</td>
+                        <td></td>
+                        <td class="text-end">{{ total_retail_card|floatformat:2 }}</td>
+                    </tr>
+                    <tr class="text-danger">
+                        <td class="ps-4"><strong>— Pending</strong></td>
+                        <td></td>
+                        <td class="text-end"><strong>{{ total_retail_pending|floatformat:2 }}</strong></td>
+                    </tr>
+
+                    <!-- ========== WHOLESALE SALES ========== -->
+                    <tr class="table-warning">
+                        <td colspan="3"><strong>3. WHOLESALE SALES</strong></td>
+                    </tr>
+                    <tr>
+                        <td>
+                            Total Wholesale Sales
+                            <small class="text-muted d-block">
+                                Live weight (after yield conversion)
+                                {% if total_wholesale_qty %} | Pieces: {{ total_wholesale_qty }}{% endif %}
+                            </small>
+                        </td>
+                        <td class="text-end">{{ total_wholesale_live_weight|floatformat:3 }}</td>
+                        <td class="text-end">{{ total_wholesale_amount|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td class="ps-4">— Paid on Sale Day</td>
+                        <td></td>
+                        <td class="text-end">{{ total_wholesale_paid_today|floatformat:2 }}</td>
+                    </tr>
+                    <tr class="text-danger">
+                        <td class="ps-4"><strong>— Pending Balance</strong></td>
+                        <td></td>
+                        <td class="text-end"><strong>{{ total_wholesale_pending|floatformat:2 }}</strong></td>
+                    </tr>
+
+                    {% if total_wholesale_payment_received > 0 %}
+                    <tr class="table-info">
+                        <td colspan="3"><strong>4. WHOLESALE PAYMENTS RECEIVED TODAY</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Total Payments Received</td>
+                        <td></td>
+                        <td class="text-end">{{ total_wholesale_payment_received|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td class="ps-4">— Cash Portion</td>
+                        <td></td>
+                        <td class="text-end">{{ wholesale_cash_payment_received|floatformat:2 }}</td>
+                    </tr>
+                    {% if wholesale_payments %}
+                        {% for p in wholesale_payments %}
+                            <tr>
+                                <td class="ps-5">
+                                    <small>
+                                        {{ p.customer.customer_name }} ({{ p.receipt_no }}) — {{ p.get_payment_mode_display }}
+                                    </small>
+                                </td>
+                                <td></td>
+                                <td class="text-end"><small>{{ p.amount|floatformat:2 }}</small></td>
+                            </tr>
+                        {% endfor %}
+                    {% endif %}
+                    {% endif %}
+
+                    <!-- ========== EXPENSES ========== -->
+                    <tr class="table-secondary">
+                        <td colspan="3">
+                            <strong>{% if total_wholesale_payment_received > 0 %}5{% else %}4{% endif %}. EXPENSES</strong>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            Total Expenses
+                            <small class="text-muted d-block">
+                                {{ expense_count }} expense{{ expense_count|pluralize }} (all in cash)
+                            </small>
+                        </td>
+                        <td></td>
+                        <td class="text-end">{{ total_expense|floatformat:2 }}</td>
+                    </tr>
+
+                    <!-- ========== CASH HAND OVER ========== -->
+                    <tr class="table-dark">
+                        <td colspan="3">
+                            <strong>{% if total_wholesale_payment_received > 0 %}6{% else %}5{% endif %}. CASH HAND OVER</strong>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            Retail Cash Sales
+                            <small class="text-muted d-block">Total cash from retail bills today</small>
+                        </td>
+                        <td></td>
+                        <td class="text-end">{{ total_retail_cash|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            (+) Wholesale Cash Payments Received
+                        </td>
+                        <td></td>
+                        <td class="text-end">{{ wholesale_cash_payment_received|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Total Cash Received</strong></td>
+                        <td></td>
+                        <td class="text-end"><strong>{{ total_cash_received|floatformat:2 }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>(-) Total Expenses</td>
+                        <td></td>
+                        <td class="text-end">- {{ total_expense|floatformat:2 }}</td>
+                    </tr>
+                    <tr class="table-success">
+                        <td><strong>NET CASH HAND OVER</strong></td>
+                        <td></td>
+                        <td class="text-end">
+                            <strong style="font-size: 1.2rem;">₹ {{ cash_hand_over|floatformat:2 }}</strong>
+                        </td>
+                    </tr>
+
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% endif %}
+</div>
+{% endblock %}

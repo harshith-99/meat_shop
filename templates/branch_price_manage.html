@@ -1,0 +1,94 @@
+{% load static %}
+{% include "sidebar/sidebar.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 text-gray-800">
+            Manage Prices — {{ branch.branch_name }}
+        </h1>
+        <a href="{% url 'branch_price_list' %}" class="btn btn-secondary btn-sm">
+            ← Back to Branches
+        </a>
+    </div>
+
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+
+    <div class="alert alert-info">
+        <strong>Note:</strong> Leave a price blank to use the default. Setting a branch price overrides the default
+        for this branch only.
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Items & Prices</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Code</th>
+                                <th>Item Name</th>
+                                <th>Category</th>
+                                <th class="text-end">Default Retail (₹)</th>
+                                <th>Branch Retail (₹)</th>
+                                <th class="text-end">Default Wholesale (₹)</th>
+                                <th>Branch Wholesale (₹)</th>
+                                <!-- <th>Status</th> -->
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in items_data %}
+                                <tr>
+                                    <td>{{ row.item.code }}</td>
+                                    <td>{{ row.item.name }}</td>
+                                    <td>{{ row.item.category.category_name }}</td>
+                                    <td class="text-end text-muted">{{ row.default_retail }}</td>
+                                    <td>
+                                        <input type="number" step="0.01" min="0"
+                                               class="form-control form-control-sm"
+                                               name="retail_{{ row.item.id }}"
+                                               value="{{ row.branch_retail }}"
+                                               placeholder="—"
+                                               style="max-width: 120px;">
+                                    </td>
+                                    <td class="text-end text-muted">{{ row.default_wholesale }}</td>
+                                    <td>
+                                        <input type="number" step="0.01" min="0"
+                                               class="form-control form-control-sm"
+                                               name="wholesale_{{ row.item.id }}"
+                                               value="{{ row.branch_wholesale }}"
+                                               placeholder="—"
+                                               style="max-width: 120px;">
+                                    </td>
+                                    <!-- <td>
+                                        {% if row.has_override %}
+                                            <span class="badge bg-success">Custom</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Default</span>
+                                        {% endif %}
+                                    </td> -->
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">No items available.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end mb-4">
+            <button type="submit" class="btn btn-primary btn-lg">Save Branch Prices</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -334,3 +334,19 @@ class DailystockUpdate(models.Model):
     
 class PettyCashBalance(models.Model):
     balance = models.DecimalField(max_digits=12, decimal_places=3, default=10000.000)
+
+class ItemBranchPrice(models.Model):
+
+    item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name='branch_prices')
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE)
+    price_per_unit_retail = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    price_per_unit_wholesale = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('item', 'branch')
+        ordering = ['branch__branch_name', 'item__name']
+
+    def __str__(self):
+        return f"{self.item.name} @ {self.branch.branch_name}"

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Daily Summary Report</title>
+    <style>
+        @page { size: A4; margin: 1.5cm; }
+        body { font-family: Arial, sans-serif; font-size: 10pt; color: #000; }
+        h2 { text-align: center; margin: 0; }
+        h4 { text-align: center; margin: 4px 0 12px 0; font-weight: normal; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+        th, td { border: 1px solid #444; padding: 5px 8px; }
+        thead { background: #333; color: #fff; }
+        .text-end { text-align: right; }
+        .ps-4 { padding-left: 24px; }
+        .ps-5 { padding-left: 36px; }
+        .section-purchase  { background: #cfe2ff; }
+        .section-retail    { background: #d1e7dd; }
+        .section-wholesale { background: #fff3cd; }
+        .section-payments  { background: #cff4fc; }
+        .section-expense   { background: #e2e3e5; }
+        .section-cash      { background: #212529; color: #fff; }
+        .total-row td { font-weight: bold; }
+        .danger { color: #b00; font-weight: bold; }
+        .success-row { background: #d1e7dd; font-weight: bold; }
+        .small { font-size: 8pt; color: #555; }
+    </style>
+</head>
+<body>
+    <h2>Daily Summary Report</h2>
+    <h4>
+        Date: {{ report_date|date:"d M Y" }}
+        {% if selected_branch %} | Branch: {{ selected_branch.branch_name }}{% endif %}
+    </h4>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 50%;">Particular</th>
+                <th class="text-end" style="width: 25%;">Weight (kg)</th>
+                <th class="text-end" style="width: 25%;">Amount (₹)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- PURCHASE -->
+            <tr class="section-purchase">
+                <td colspan="3"><strong>1. PURCHASE</strong></td>
+            </tr>
+            <tr>
+                <td>
+                    Total Purchase
+                    <div class="small">Live weight (after yield conversion){% if total_purchase_qty %} | Pieces: {{ total_purchase_qty }}{% endif %}</div>
+                </td>
+                <td class="text-end">{{ total_purchase_live_weight|floatformat:3 }}</td>
+                <td class="text-end">{{ total_purchase_amount|floatformat:2 }}</td>
+            </tr>
+
+            <!-- RETAIL -->
+            <tr class="section-retail">
+                <td colspan="3"><strong>2. RETAIL SALES</strong></td>
+            </tr>
+            <tr>
+                <td>
+                    Total Retail Sales
+                    <div class="small">Live weight (after yield conversion){% if total_retail_qty %} | Pieces: {{ total_retail_qty }}{% endif %}</div>
+                </td>
+                <td class="text-end">{{ total_retail_live_weight|floatformat:3 }}</td>
+                <td class="text-end">{{ total_retail_amount|floatformat:2 }}</td>
+            </tr>
+            <tr><td class="ps-4">— Cash</td><td></td><td class="text-end">{{ total_retail_cash|floatformat:2 }}</td></tr>
+            <tr><td class="ps-4">— UPI</td><td></td><td class="text-end">{{ total_retail_upi|floatformat:2 }}</td></tr>
+            <tr><td class="ps-4">— Card</td><td></td><td class="text-end">{{ total_retail_card|floatformat:2 }}</td></tr>
+            <tr>
+                <td class="ps-4 danger">— Pending</td>
+                <td></td>
+                <td class="text-end danger">{{ total_retail_pending|floatformat:2 }}</td>
+            </tr>
+
+            <!-- WHOLESALE -->
+            <tr class="section-wholesale">
+                <td colspan="3"><strong>3. WHOLESALE SALES</strong></td>
+            </tr>
+            <tr>
+                <td>
+                    Total Wholesale Sales
+                    <div class="small">Live weight (after yield conversion){% if total_wholesale_qty %} | Pieces: {{ total_wholesale_qty }}{% endif %}</div>
+                </td>
+                <td class="text-end">{{ total_wholesale_live_weight|floatformat:3 }}</td>
+                <td class="text-end">{{ total_wholesale_amount|floatformat:2 }}</td>
+            </tr>
+            <tr><td class="ps-4">— Paid on Sale Day</td><td></td><td class="text-end">{{ total_wholesale_paid_today|floatformat:2 }}</td></tr>
+            <tr>
+                <td class="ps-4 danger">— Pending Balance</td>
+                <td></td>
+                <td class="text-end danger">{{ total_wholesale_pending|floatformat:2 }}</td>
+            </tr>
+
+            {% if total_wholesale_payment_received > 0 %}
+            <!-- WHOLESALE PAYMENTS -->
+            <tr class="section-payments">
+                <td colspan="3"><strong>4. WHOLESALE PAYMENTS RECEIVED TODAY</strong></td>
+            </tr>
+            <tr>
+                <td>Total Payments Received</td>
+                <td></td>
+                <td class="text-end">{{ total_wholesale_payment_received|floatformat:2 }}</td>
+            </tr>
+            <tr>
+                <td class="ps-4">— Cash Portion</td>
+                <td></td>
+                <td class="text-end">{{ wholesale_cash_payment_received|floatformat:2 }}</td>
+            </tr>
+            {% for p in wholesale_payments %}
+            <tr>
+                <td class="ps-5">
+                    <span class="small">{{ p.customer.customer_name }} ({{ p.receipt_no }}) — {{ p.get_payment_mode_display }}</span>
+                </td>
+                <td></td>
+                <td class="text-end small">{{ p.amount|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+            {% endif %}
+
+            <!-- EXPENSES -->
+            <tr class="section-expense">
+                <td colspan="3"><strong>{% if total_wholesale_payment_received > 0 %}5{% else %}4{% endif %}. EXPENSES</strong></td>
+            </tr>
+            <tr>
+                <td>
+                    Total Expenses
+                    <div class="small">{{ expense_count }} expense{{ expense_count|pluralize }} (all in cash)</div>
+                </td>
+                <td></td>
+                <td class="text-end">{{ total_expense|floatformat:2 }}</td>
+            </tr>
+
+            <!-- CASH HAND OVER -->
+            <tr class="section-cash">
+                <td colspan="3"><strong>{% if total_wholesale_payment_received > 0 %}6{% else %}5{% endif %}. CASH HAND OVER</strong></td>
+            </tr>
+            <tr>
+                <td>Retail Cash Sales</td>
+                <td></td>
+                <td class="text-end">{{ total_retail_cash|floatformat:2 }}</td>
+            </tr>
+            <tr>
+                <td>(+) Wholesale Cash Payments Received</td>
+                <td></td>
+                <td class="text-end">{{ wholesale_cash_payment_received|floatformat:2 }}</td>
+            </tr>
+            <tr class="total-row">
+                <td>Total Cash Received</td>
+                <td></td>
+                <td class="text-end">{{ total_cash_received|floatformat:2 }}</td>
+            </tr>
+            <tr>
+                <td>(-) Total Expenses</td>
+                <td></td>
+                <td class="text-end">- {{ total_expense|floatformat:2 }}</td>
+            </tr>
+            <tr class="success-row">
+                <td>NET CASH HAND OVER</td>
+                <td></td>
+                <td class="text-end">₹ {{ cash_hand_over|floatformat:2 }}</td>
+            </tr>
+        </tbody>
+    </table>
+</body>
+</html>

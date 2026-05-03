@@ -1,5 +1,5 @@
 from django import forms
-from .models import PettyCashBalance,DailystockUpdate,YieldPercentage,ExpenseCategory,Expense,CustomUser,Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance,WholesalePayment
+from .models import ItemBranchPrice,ItemBranchPrice,PettyCashBalance,DailystockUpdate,YieldPercentage,ExpenseCategory,Expense,CustomUser,Branch, Purchase, PurchaseDetail, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance,WholesalePayment
 from django.forms import modelformset_factory
 from django.forms import inlineformset_factory
 from django.core.exceptions import ValidationError
@@ -8,6 +8,21 @@ from decimal import Decimal
 from django import forms
 from .models import DailystockUpdate
 from decimal import Decimal
+
+
+class ItemBranchPriceForm(forms.ModelForm):
+    price_per_unit_retail = forms.DecimalField(
+        max_digits=10, decimal_places=2,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'autocomplete': 'off'})
+    )
+    price_per_unit_wholesale = forms.DecimalField(
+        max_digits=10, decimal_places=2,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'autocomplete': 'off'})
+    )
+
+    class Meta:
+        model = ItemBranchPrice
+        fields = ['price_per_unit_retail', 'price_per_unit_wholesale']
 
 
 class DailyStockUpdateForm(forms.ModelForm):

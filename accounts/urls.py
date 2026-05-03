@@ -119,5 +119,11 @@ urlpatterns = [
 
     path('wholesale-payment/add/', views.wholesale_payment_add, name='wholesale_payment_add'),
     
+    # Branch Price Management
+    path('branch-prices/', views.branch_price_list, name='branch_price_list'),
+    path('branch-prices/<int:branch_id>/manage/', views.branch_price_manage, name='branch_price_manage'),
+
+    # Daily Summary Report
+    path('daily-summary-report/', views.daily_summary_report, name='daily_summary_report'),
 ]
 

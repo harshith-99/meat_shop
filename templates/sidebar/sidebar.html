@@ -96,6 +96,7 @@
                     <div class="bg-white py-2 collapse-inner rounded">
                         <a class="collapse-item" href="{% url 'category_list' %}">Item Category</a>
                         <a class="collapse-item" href="{% url 'item_list' %}">Item List</a>
+                        <a class="collapse-item" href="{% url 'branch_price_list' %}">Item Price</a>
                     </div>
                 </div>
             </li>
@@ -158,6 +159,7 @@
                         {% endif %}
                         {% if request.user.role == 'admin' or request.user.role == 'super_admin' or request.user.role == 'manager'%}
                             <a class="collapse-item" href="{% url 'wholesale_profit_report' %}">Customer Profit Report</a>
+                             <a class="collapse-item" href="{% url 'daily_summary_report' %}">Daily Summary Report</a>
                         {% endif %}
                         
                     </div>

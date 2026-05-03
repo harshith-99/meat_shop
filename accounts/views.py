@@ -9,8 +9,8 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.db import transaction
-from .forms import PettyCashBalanceForm,DailyStockUpdateForm,YieldPercentageForm,ExpenseCategoryForm,ExpenseForm,EmployeeLoginForm,PurchaseForm, PurchaseDetailFormSet, ItemCategoryForm, BranchForm, SupplierForm, ItemForm, RetailSalesForm, RetailSalesDetailFormSet, CustomerDataForm, WholesaleSalesForm, WholesaleSalesDetailFormSet,SupplierpayForm,EmployeForm,AttendanceInlineForm,CustomerForm,WholesalePaymentForm
-from .models import PettyCashBalance,DailystockUpdate,YieldPercentage,ExpenseCategory,Expense,Purchase, PurchaseDetail, Branch, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance,WholesalePayment
+from .forms import ItemBranchPriceForm,PettyCashBalanceForm,DailyStockUpdateForm,YieldPercentageForm,ExpenseCategoryForm,ExpenseForm,EmployeeLoginForm,PurchaseForm, PurchaseDetailFormSet, ItemCategoryForm, BranchForm, SupplierForm, ItemForm, RetailSalesForm, RetailSalesDetailFormSet, CustomerDataForm, WholesaleSalesForm, WholesaleSalesDetailFormSet,SupplierpayForm,EmployeForm,AttendanceInlineForm,CustomerForm,WholesalePaymentForm
+from .models import ItemBranchPrice,PettyCashBalance,DailystockUpdate,YieldPercentage,ExpenseCategory,Expense,Purchase, PurchaseDetail, Branch, Supplier, ItemCategory, Item, RetailSales, RetailSalesDetails, Customer, WholesaleSales, WholesaleSalesDetails,Supplierpay,Employe,Attendance,WholesalePayment
 import logging
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
@@ -39,6 +39,342 @@ logo_path = os.path.join(
     'img',
     'jaan_logo.jpeg'
 )
+@login_required(login_url='login')
+def daily_summary_report(request):
+    user = request.user
+    is_admin_like = user.role in ['super_admin', 'admin']
+
+    today = date.today()
+    date_str = request.GET.get('date', today.strftime('%Y-%m-%d'))
+    branch_id = request.GET.get('branch')
+    export_type = request.GET.get('export')
+
+    try:
+        report_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        report_date = today
+        date_str = today.strftime('%Y-%m-%d')
+
+    # Branch scope
+    selected_branch = None
+    if is_admin_like:
+        if branch_id and branch_id.isdigit():
+            selected_branch = Branch.objects.filter(branch_id=branch_id).first()
+    else:
+        selected_branch = user.branch
+
+    # Helper: get multiplier for an item (1 if no yield record)
+    def get_multiplier(item):
+        yp = item.yieldpercentage_set.first()
+        return yp.multipler if yp else Decimal('1.000')
+
+    # Helper: convert weight to live weight
+    # If item.is_live = True, weight is already live (multiplier=1)
+    # If item.is_live = False, multiply by yield multiplier
+    def to_live_weight(item, weight):
+        if item.is_live:
+            return weight
+        return (weight * get_multiplier(item)).quantize(Decimal('0.001'))
+
+    # ─── 1. PURCHASES ────────────────────────────────────────────
+    purchase_qs = PurchaseDetail.objects.filter(
+        purchase__purchase_date=report_date,
+        purchase__delete_status=False,
+    ).select_related('item', 'item__category', 'purchase__branch')
+
+    if selected_branch:
+        purchase_qs = purchase_qs.filter(purchase__branch=selected_branch)
+    elif not is_admin_like:
+        purchase_qs = purchase_qs.none()
+
+    total_purchase_weight = Decimal('0.000')
+    total_purchase_live_weight = Decimal('0.000')
+    total_purchase_amount = Decimal('0.00')
+    total_purchase_qty = 0
+
+    for pd in purchase_qs:
+        nw = pd.net_weight or Decimal('0.000')
+        total_purchase_weight += nw
+        total_purchase_live_weight += to_live_weight(pd.item, nw)
+        total_purchase_amount += pd.total_amount or Decimal('0.00')
+        total_purchase_qty += pd.qty or 0
+
+    # ─── 2. RETAIL SALES ─────────────────────────────────────────
+    retail_sales_qs = RetailSales.objects.filter(
+        sales_date=report_date,
+        delete_status=False,
+    )
+    if selected_branch:
+        retail_sales_qs = retail_sales_qs.filter(branch=selected_branch)
+    elif not is_admin_like:
+        retail_sales_qs = retail_sales_qs.none()
+
+    retail_details_qs = RetailSalesDetails.objects.filter(
+        sales__in=retail_sales_qs
+    ).select_related('item', 'item__category')
+
+    total_retail_weight = Decimal('0.000')
+    total_retail_live_weight = Decimal('0.000')
+    total_retail_qty = 0
+
+    for rd in retail_details_qs:
+        nw = rd.net_weight or Decimal('0.000')
+        total_retail_weight += nw
+        total_retail_live_weight += to_live_weight(rd.item, nw)
+        total_retail_qty += rd.qty or 0
+
+    retail_totals = retail_sales_qs.aggregate(
+        total_amount=Sum('grand_total'),
+        total_cash=Sum('total_cash'),
+        total_upi=Sum('total_upi'),
+        total_card=Sum('total_card'),
+        total_pending=Sum('pending_amount'),
+    )
+
+    total_retail_amount = retail_totals['total_amount'] or Decimal('0.00')
+    total_retail_cash = retail_totals['total_cash'] or Decimal('0.00')
+    total_retail_upi = retail_totals['total_upi'] or Decimal('0.00')
+    total_retail_card = retail_totals['total_card'] or Decimal('0.00')
+    total_retail_pending = retail_totals['total_pending'] or Decimal('0.00')
+
+    # ─── 3. WHOLESALE SALES ──────────────────────────────────────
+    wholesale_sales_qs = WholesaleSales.objects.filter(
+        sales_date=report_date,
+        delete_status=False,
+    )
+    if selected_branch:
+        wholesale_sales_qs = wholesale_sales_qs.filter(branch=selected_branch)
+    elif not is_admin_like:
+        wholesale_sales_qs = wholesale_sales_qs.none()
+
+    wholesale_details_qs = WholesaleSalesDetails.objects.filter(
+        sales__in=wholesale_sales_qs
+    ).select_related('item', 'item__category')
+
+    total_wholesale_weight = Decimal('0.000')
+    total_wholesale_live_weight = Decimal('0.000')
+    total_wholesale_qty = 0
+
+    for wd in wholesale_details_qs:
+        nw = wd.net_weight or Decimal('0.000')
+        total_wholesale_weight += nw
+        total_wholesale_live_weight += to_live_weight(wd.item, nw)
+        total_wholesale_qty += wd.qty or 0
+
+    wholesale_totals = wholesale_sales_qs.aggregate(
+        total_amount=Sum('grand_total'),
+        total_paid=Sum('paid_amount'),
+        total_pending=Sum('pending_balance'),
+    )
+
+    total_wholesale_amount = wholesale_totals['total_amount'] or Decimal('0.00')
+    total_wholesale_paid_today = wholesale_totals['total_paid'] or Decimal('0.00')
+    total_wholesale_pending = wholesale_totals['total_pending'] or Decimal('0.00')
+
+    # ─── 4. WHOLESALE PAYMENTS RECEIVED ON THIS DAY ──────────────
+    payment_qs = WholesalePayment.objects.filter(
+        payment_date=report_date,
+        delete_status=False,
+    )
+    if selected_branch:
+        payment_qs = payment_qs.filter(branch=selected_branch)
+    elif not is_admin_like:
+        payment_qs = payment_qs.none()
+
+    payment_totals = payment_qs.aggregate(
+        total=Sum('amount'),
+        cash=Sum('amount', filter=Q(payment_mode='cash')),
+    )
+    total_wholesale_payment_received = payment_totals['total'] or Decimal('0.00')
+    wholesale_cash_payment_received = payment_totals['cash'] or Decimal('0.00')
+
+    # ─── 5. EXPENSES (all combined, all in cash per requirement) ─
+    expense_qs = Expense.objects.filter(
+        payment_date=report_date,
+        delete_status=False,
+    )
+    if selected_branch:
+        expense_qs = expense_qs.filter(branch=selected_branch)
+    elif not is_admin_like:
+        expense_qs = expense_qs.none()
+
+    total_expense = expense_qs.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+    # ─── 6. CASH HAND OVER ───────────────────────────────────────
+    # Cash received = retail cash + wholesale cash payments
+    # Then subtract expenses
+    total_cash_received = total_retail_cash + wholesale_cash_payment_received
+    cash_hand_over = total_cash_received - total_expense
+
+    context = {
+        'report_date': report_date,
+        'date_str': date_str,
+        'today': today.strftime('%Y-%m-%d'),
+        'is_admin_like': is_admin_like,
+        'selected_branch': selected_branch,
+        'branches': Branch.objects.all() if is_admin_like else [],
+
+        # Purchase
+        'total_purchase_qty': total_purchase_qty,
+        'total_purchase_weight': total_purchase_weight,
+        'total_purchase_live_weight': total_purchase_live_weight,
+        'total_purchase_amount': total_purchase_amount,
+
+        # Retail
+        'total_retail_qty': total_retail_qty,
+        'total_retail_weight': total_retail_weight,
+        'total_retail_live_weight': total_retail_live_weight,
+        'total_retail_amount': total_retail_amount,
+        'total_retail_cash': total_retail_cash,
+        'total_retail_upi': total_retail_upi,
+        'total_retail_card': total_retail_card,
+        'total_retail_pending': total_retail_pending,
+
+        # Wholesale
+        'total_wholesale_qty': total_wholesale_qty,
+        'total_wholesale_weight': total_wholesale_weight,
+        'total_wholesale_live_weight': total_wholesale_live_weight,
+        'total_wholesale_amount': total_wholesale_amount,
+        'total_wholesale_paid_today': total_wholesale_paid_today,
+        'total_wholesale_pending': total_wholesale_pending,
+        'total_wholesale_payment_received': total_wholesale_payment_received,
+        'wholesale_cash_payment_received': wholesale_cash_payment_received,
+        'wholesale_payments': payment_qs.select_related('customer'),
+
+        # Expenses
+        'total_expense': total_expense,
+        'expense_count': expense_qs.count(),
+
+        # Cash hand over
+        'total_cash_received': total_cash_received,
+        'cash_hand_over': cash_hand_over,
+
+        'logo_path': logo_path,
+    }
+
+    if export_type == 'pdf':
+        filename = f"daily-summary-{date_str}.pdf"
+        pdf = render_to_pdf('daily_summary_report_pdf.html', context)
+        if not pdf:
+            return HttpResponse("PDF generation error", status=500)
+        response = HttpResponse(pdf, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    return render(request, 'daily_summary_report.html', context)
+
+@login_required(login_url='login')
+def branch_price_list(request):
+    """List all branches; pick one to manage prices for."""
+    if request.user.role not in ['super_admin', 'admin', 'manager']:
+        messages.error(request, "You are not authorized.")
+        return redirect('dashboard')
+
+    user = request.user
+
+    if user.role == 'manager':
+        # Manager only sees their own branch
+        branches = Branch.objects.filter(pk=user.branch.pk) if user.branch else Branch.objects.none()
+    else:
+        branches = Branch.objects.all().order_by('branch_name')
+
+    return render(request, 'branch_price_list.html', {
+        'branches': branches,
+    })
+
+
+@login_required(login_url='login')
+def branch_price_manage(request, branch_id):
+    """Set/update prices for all items in a specific branch."""
+    if request.user.role not in ['super_admin', 'admin', 'manager']:
+        messages.error(request, "You are not authorized.")
+        return redirect('dashboard')
+
+    branch = get_object_or_404(Branch, pk=branch_id)
+
+    # Manager can only manage their own branch
+    if request.user.role == 'manager':
+        if not request.user.branch or request.user.branch.pk != branch.pk:
+            messages.error(request, "You can only manage prices for your own branch.")
+            return redirect('branch_price_list')
+
+    items = Item.objects.select_related('category').order_by('category__category_name', 'name')
+
+    # Build a quick lookup for existing branch prices
+    existing_prices = {
+        bp.item_id: bp
+        for bp in ItemBranchPrice.objects.filter(branch=branch)
+    }
+
+    if request.method == 'POST':
+        with transaction.atomic():
+            saved_count = 0
+            for item in items:
+                retail_key = f'retail_{item.id}'
+                wholesale_key = f'wholesale_{item.id}'
+
+                retail_val = request.POST.get(retail_key, '').strip()
+                wholesale_val = request.POST.get(wholesale_key, '').strip()
+
+                if not retail_val and not wholesale_val:
+                    continue
+
+                try:
+                    retail_price = Decimal(retail_val) if retail_val else Decimal('0.00')
+                    wholesale_price = Decimal(wholesale_val) if wholesale_val else Decimal('0.00')
+                except (ValueError, TypeError):
+                    continue
+
+                ItemBranchPrice.objects.update_or_create(
+                    item=item,
+                    branch=branch,
+                    defaults={
+                        'price_per_unit_retail': retail_price,
+                        'price_per_unit_wholesale': wholesale_price,
+                        'updated_by': request.user,
+                    }
+                )
+                saved_count += 1
+
+            messages.success(request, f"Updated branch prices for {saved_count} items.")
+            return redirect('branch_price_manage', branch_id=branch.pk)
+
+    # Build display data
+    items_data = []
+    for item in items:
+        bp = existing_prices.get(item.id)
+        items_data.append({
+            'item': item,
+            'default_retail': item.price_per_unit_retail,
+            'default_wholesale': item.price_per_unit_wholesale,
+            'branch_retail': bp.price_per_unit_retail if bp else '',
+            'branch_wholesale': bp.price_per_unit_wholesale if bp else '',
+            'has_override': bp is not None,
+        })
+
+    return render(request, 'branch_price_manage.html', {
+        'branch': branch,
+        'items_data': items_data,
+    })
+
+
+# Helper function — use this anywhere you need to fetch the effective price
+def get_effective_price(item, branch, sale_type='retail'):
+    """
+    Returns branch-specific price if set; otherwise falls back to item default.
+    sale_type: 'retail' or 'wholesale'
+    """
+    if branch:
+        bp = ItemBranchPrice.objects.filter(item=item, branch=branch).first()
+        if bp:
+            if sale_type == 'wholesale':
+                return bp.price_per_unit_wholesale
+            return bp.price_per_unit_retail
+
+    if sale_type == 'wholesale':
+        return item.price_per_unit_wholesale
+    return item.price_per_unit_retail
+
 
 @login_required(login_url='login')
 def item_wise_profit_report(request):
@@ -3092,29 +3428,56 @@ def wholesale_sales_delete(request, pk):
 @require_GET
 def search_items(request):
     q = request.GET.get('q', '')
-    items = Item.objects.filter(name__icontains=q)
-    data = [
-        {
+    branch_id = request.GET.get('branch_id')  # NEW: pass branch context
+
+    items = Item.objects.filter(name__icontains=q).select_related('category')
+
+    # Pre-load branch prices if branch given
+    branch_price_map = {}
+    if branch_id and str(branch_id).isdigit():
+        branch_prices = ItemBranchPrice.objects.filter(
+            branch_id=branch_id,
+            item__in=items
+        )
+        branch_price_map = {bp.item_id: bp for bp in branch_prices}
+
+    data = []
+    for item in items:
+        bp = branch_price_map.get(item.id)
+        retail = bp.price_per_unit_retail if bp else item.price_per_unit_retail
+        wholesale = bp.price_per_unit_wholesale if bp else item.price_per_unit_wholesale
+        data.append({
             'id': item.id,
             'name': item.name,
             'code': item.code,
-            'price': str(item.price_per_unit_retail),
-            'wholesale_price': str(item.price_per_unit_wholesale),
+            'price': str(retail),
+            'wholesale_price': str(wholesale),
             'is_weight_based': item.category.is_weight_based
-        } for item in items
-    ]
+        })
     return JsonResponse(data, safe=False)
 
 @require_GET
 def item_by_code(request):
     code = request.GET.get('code', '')
+    branch_id = request.GET.get('branch_id')  # NEW
+
     try:
-        item = Item.objects.get(code=code)
+        item = Item.objects.select_related('category').get(code=code)
+
+        retail = item.price_per_unit_retail
+        wholesale = item.price_per_unit_wholesale
+
+        if branch_id and str(branch_id).isdigit():
+            bp = ItemBranchPrice.objects.filter(item=item, branch_id=branch_id).first()
+            if bp:
+                retail = bp.price_per_unit_retail
+                wholesale = bp.price_per_unit_wholesale
+
         data = {
             'id': item.id,
             'name': item.name,
-            'price': str(item.price_per_unit_retail),
-            'wholesale_price': str(item.price_per_unit_wholesale),
+            'price': str(retail),
+            'wholesale_price': str(wholesale),
             'is_weight_based': item.category.is_weight_based
         }
         return JsonResponse(data)

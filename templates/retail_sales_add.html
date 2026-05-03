@@ -538,7 +538,10 @@ $(document).on("focus", ".item-name", function () {
     $input.autocomplete({
         minLength: 1,
         source: function (request, response) {
-            $.get('/accounts/api/search_items/', { q: request.term }, function (data) {
+            $.get('/accounts/api/search_items/', {
+                q: request.term,
+                branch_id: $('#id_branch').val() || '{{ request.user.branch.branch_id|default:"" }}'
+            }, function (data) {
                 response(data.map(item => ({
                     label: `${item.name} (${item.code})`,
                     value: item.name,
@@ -565,7 +568,10 @@ $(document).on("focus", ".item-name", function () {
         const code = $(this).val().trim();
         if (code) {
             const row = $(this).closest('tr');
-            $.get('/accounts/api/item_by_code/', {code: code}, function(data) {
+            $.get('/accounts/api/item_by_code/', {
+                code: code,
+                branch_id: $('#id_branch').val() || '{{ request.user.branch.branch_id|default:"" }}'
+            }, function(data) {
                 if (!data.error) {
                     row.find('.item-name').val(data.name);
                     row.find('[name$="price_per_unit"]').val(data.price);
